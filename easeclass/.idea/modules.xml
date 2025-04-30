@@ -2,7 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/easeclass.iml" filepath="$PROJECT_DIR$/.idea/easeclass.iml" />
+      <module fileurl="file://$PROJECT_DIR$/easeclass.iml" filepath="$PROJECT_DIR$/easeclass.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/easeclass_android.iml" filepath="$PROJECT_DIR$/android/easeclass_android.iml" />
     </modules>
   </component>
 </project>
