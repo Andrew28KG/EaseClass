@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/navigation_helper.dart'; // Import navigation helper
+import '../theme/app_colors.dart'; // Import app colors
 
 class RoomDetailPage extends StatefulWidget {
   const RoomDetailPage({Key? key}) : super(key: key);
@@ -10,6 +12,7 @@ class RoomDetailPage extends StatefulWidget {
 class _RoomDetailPageState extends State<RoomDetailPage> {
   DateTime selectedDate = DateTime.now();
   String selectedTimeSlot = '';
+  final TextEditingController _commentsController = TextEditingController();
 
   final List<String> timeSlots = [
     '09:00 - 10:00',
@@ -20,6 +23,21 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     '15:00 - 16:00',
   ];
 
+  // List of available equipment
+  final List<String> availableEquipment = [
+    'Projector',
+    'Whiteboard',
+    'Air Conditioning',
+    'Computer',
+    'Audio System',
+  ];
+
+  @override
+  void dispose() {
+    _commentsController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
@@ -28,188 +46,426 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     final int floor = args['floor'];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Room $roomId'),
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Room Image
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.grey.shade200,
-                ),
-                child: const Center(
-                  child: Icon(Icons.meeting_room, size: 100),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Room Information
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Room Information',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildInfoRow('Building', building),
-                      _buildInfoRow('Floor', 'Floor $floor'),
-                      _buildInfoRow('Capacity', '30 students'),
-                      _buildInfoRow('Equipment', 'Projector, Whiteboard, Air Conditioning'),
-                      _buildInfoRow('Room Type', 'Classroom'),
-                      _buildInfoRow('Status', 'Available'),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Date Selection
-              const Text(
-                'Select Date',
-                style: TextStyle(
-                  fontSize: 20,
+      body: CustomScrollView(
+        slivers: [
+          // Custom app bar with image
+          SliverAppBar(
+            expandedHeight: 200,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text('Room $roomId', 
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              InkWell(
-                onTap: () async {
-                  final DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 30)),
-                  );
-                  if (picked != null && picked != selectedDate) {
-                    setState(() {
-                      selectedDate = picked;
-                      selectedTimeSlot = ''; // Reset time slot when date changes
-                    });
-                  }
-                },
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Date',
-                    border: OutlineInputBorder(),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Background image or placeholder
+                  Container(
+                    color: AppColors.primary.withOpacity(0.7),
+                    child: const Icon(
+                      Icons.meeting_room,
+                      size: 80,
+                      color: Colors.white54,
+                    ),
                   ),
-                  child: Text(
-                    '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Time Slots
-              const Text(
-                'Available Time Slots',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: timeSlots.length,
-                itemBuilder: (context, index) {
-                  final timeSlot = timeSlots[index];
-                  final isSelected = timeSlot == selectedTimeSlot;
-                  return Card(
-                    color: isSelected ? Colors.blue.shade50 : null,
-                    child: ListTile(
-                      leading: const Icon(Icons.access_time),
-                      title: Text(timeSlot),
-                      trailing: ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedTimeSlot = timeSlot;
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isSelected ? Colors.blue : Colors.grey,
-                        ),
-                        child: Text(isSelected ? 'Selected' : 'Select'),
+                  // Gradient overlay for better text readability
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                        stops: const [0.6, 1.0],
                       ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-
-              // Book Button
-              if (selectedTimeSlot.isNotEmpty)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Navigate to booking confirmation
-                      Navigator.pushNamed(
-                        context,
-                        '/booking-confirmation',
-                        arguments: {
-                          'roomId': roomId,
-                          'building': building,
-                          'floor': floor,
-                          'date': '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                          'timeSlot': selectedTimeSlot,
-                        },
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: const Text('Book This Room'),
                   ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
+                ],
               ),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+
+          // Content
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Quick info chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildInfoChip(Icons.business, 'Building $building'),
+                      _buildInfoChip(Icons.stairs, 'Floor $floor'),
+                      _buildInfoChip(Icons.people, '30 students'),
+                      _buildInfoChip(Icons.meeting_room, 'Classroom'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Room Details Section
+                  _buildSectionHeader('Room Details'),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Equipment section with expandable details
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.computer, color: AppColors.secondary),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Available Equipment',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    // Display equipment list in a wrap layout
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: availableEquipment.map((item) => 
+                                        Chip(
+                                          avatar: const Icon(
+                                            Icons.check_circle, 
+                                            size: 16, 
+                                            color: Colors.green,
+                                          ),
+                                          label: Text(item),
+                                          backgroundColor: Colors.grey.shade50,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                            side: BorderSide(color: Colors.grey.shade300),
+                                          ),
+                                        )
+                                      ).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 32),
+                          
+                          // Status and availability info
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.green),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Room Status',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Available for booking',
+                                      style: TextStyle(color: Colors.green),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Booking details section
+                  _buildSectionHeader('Book This Room'),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date selector
+                          const Text(
+                            'Select Date',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: () {
+                              // Prevent showing dialogs during build/layout phase
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                
+                                // Use a bottom sheet instead of a date picker to prevent navigation issues
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.white,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                  ),
+                                  builder: (bottomSheetContext) => SafeArea(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Text(
+                                                "Select Date",
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              IconButton(
+                                                icon: const Icon(Icons.close),
+                                                onPressed: () => Navigator.pop(bottomSheetContext),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          // Use a CalendarDatePicker to avoid navigation issues
+                                          CalendarDatePicker(
+                                            initialDate: selectedDate,
+                                            firstDate: DateTime.now(),
+                                            lastDate: DateTime.now().add(const Duration(days: 30)),
+                                            onDateChanged: (newDate) {
+                                              if (mounted) {
+                                                setState(() {
+                                                  selectedDate = newDate;
+                                                  selectedTimeSlot = ''; // Reset time slot when date changes
+                                                });
+                                                // Close the bottom sheet
+                                                Navigator.pop(bottomSheetContext);
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${_getDayOfWeek(selectedDate)}, ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                                    style: const TextStyle(fontSize: 16),
+                                  ),
+                                  const Icon(Icons.calendar_today, color: AppColors.secondary),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Time slot selector
+                          const Text(
+                            'Select Time Slot',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: timeSlots.map((timeSlot) {
+                              final isSelected = timeSlot == selectedTimeSlot;
+                              return ChoiceChip(
+                                label: Text(timeSlot),
+                                selected: isSelected,
+                                selectedColor: AppColors.primary.withOpacity(0.2),
+                                onSelected: (selected) {
+                                  setState(() {
+                                    selectedTimeSlot = selected ? timeSlot : '';
+                                  });
+                                },
+                                avatar: Icon(
+                                  Icons.access_time,
+                                  color: isSelected ? AppColors.primary : Colors.grey,
+                                  size: 16,
+                                ),
+                                labelStyle: TextStyle(
+                                  color: isSelected ? AppColors.primary : Colors.black87,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Additional equipment and comments
+                          const Text(
+                            'Additional Requirements',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _commentsController,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: 'Specify any additional equipment or special requirements...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey.shade50,
+                              prefixIcon: const Padding(
+                                padding: EdgeInsets.only(bottom: 40),
+                                child: Icon(Icons.note_add),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+
+                  // Book Button
+                  if (selectedTimeSlot.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Navigate to booking confirmation
+                          NavigationHelper.navigateToBookingConfirmation(
+                            context,
+                            {
+                              'roomId': roomId,
+                              'building': building,
+                              'floor': floor,
+                              'date': '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                              'timeSlot': selectedTimeSlot,
+                              'comments': _commentsController.text,
+                            },
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 3,
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle),
+                            SizedBox(width: 8),
+                            Text(
+                              'Confirm Booking',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              textAlign: TextAlign.right,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.grey.shade300,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(IconData icon, String label) {
+    return Chip(
+      avatar: Icon(icon, size: 16, color: AppColors.primary),
+      label: Text(label),
+      backgroundColor: Colors.grey.shade100,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+    );
+  }
+
+  String _getDayOfWeek(DateTime date) {
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days[date.weekday - 1];
   }
 } 

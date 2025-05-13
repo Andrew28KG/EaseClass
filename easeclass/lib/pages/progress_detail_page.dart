@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/navigation_helper.dart'; // Import navigation helper
 
 class ProgressDetailPage extends StatefulWidget {
   const ProgressDetailPage({Key? key}) : super(key: key);
@@ -102,10 +103,9 @@ class _ProgressDetailPageState extends State<ProgressDetailPage> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.pushNamed(
+                      NavigationHelper.navigateToRating(
                         context,
-                        '/rating',
-                        arguments: {
+                        {
                           'bookingId': bookingId,
                           'roomId': roomId,
                           'date': date,

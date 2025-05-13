@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/navigation_helper.dart'; // Import navigation helper
 
 class BookingConfirmationPage extends StatelessWidget {
   const BookingConfirmationPage({Key? key}) : super(key: key);
@@ -117,8 +118,8 @@ class BookingConfirmationPage extends StatelessWidget {
                           TextButton(
                             onPressed: () {
                               Navigator.pop(context); // Close dialog
-                              Navigator.pop(context); // Go back to room detail
-                              Navigator.pop(context); // Go back to available rooms
+                              // Return to available rooms tab
+                              NavigationHelper.navigateToAvailableRooms(context);
                             },
                             child: const Text('OK'),
                           ),
