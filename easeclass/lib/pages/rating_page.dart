@@ -76,14 +76,14 @@ class _RatingPageState extends State<RatingPage> {
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final int bookingId = args['bookingId'];
-    final int roomId = args['roomId'];
-    final String date = args['date'];
-    final String time = args['time'];
+    // Use dynamic types to avoid type casting errors
+    final dynamic bookingId = args['bookingId'];
+    final dynamic roomId = args['roomId'];
+    final String date = args['date'] ?? '';
+    final String time = args['time'] ?? '';
 
     return Scaffold(
       appBar: AppBar(

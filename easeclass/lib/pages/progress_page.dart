@@ -102,8 +102,7 @@ class _ProgressPageState extends State<ProgressPage> with SingleTickerProviderSt
     final List<BookingModel> filteredBookings = _bookings.where((booking) {
       return isActive ? booking.isActive : booking.isCompleted;
     }).toList();
-    
-    if (filteredBookings.isEmpty) {
+      if (filteredBookings.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -119,18 +118,6 @@ class _ProgressPageState extends State<ProgressPage> with SingleTickerProviderSt
               style: const TextStyle(
                 fontSize: 18,
                 color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () {
-                NavigationHelper.navigateToAvailableRooms(context);
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Book a Room'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
               ),
             ),
           ],

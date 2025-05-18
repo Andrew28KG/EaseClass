@@ -381,20 +381,23 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                       return Card(
                         margin: const EdgeInsets.all(8),
                         child: ListTile(
-                          leading: const Icon(Icons.meeting_room),
-                          title: Row(
+                          leading: const Icon(Icons.meeting_room),                          title: Row(
                             children: [
-                              Text('Room ${room.id}'),
-                              Spacer(),
-                              // Show rating
+                              Expanded(
+                                child: Text(
+                                  'Room ${room.id}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              // Show rating with constrained size
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.star, color: Colors.amber, size: 18),
-                                  SizedBox(width: 4),
+                                  Icon(Icons.star, color: Colors.amber, size: 16),
+                                  SizedBox(width: 2),
                                   Text(
-                                    '${room.rating}',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                    room.rating.toStringAsFixed(1),
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),

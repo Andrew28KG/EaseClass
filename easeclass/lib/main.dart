@@ -13,6 +13,7 @@ import 'pages/rating_page.dart';
 import 'pages/user_login_page.dart';
 import 'pages/admin_login_page.dart';
 import 'pages/admin_dashboard_page.dart';
+import 'services/database_initializer.dart';
 
 Future<void> initializeFirebase() async {
   try {
@@ -31,6 +32,11 @@ Future<void> initializeFirebase() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeFirebase();
+  
+  // Initialize database with sample data
+  final dbInitializer = DatabaseInitializer();
+  await dbInitializer.initializeDatabase();
+  
   runApp(const MyApp());
 }
 

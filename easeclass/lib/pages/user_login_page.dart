@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/database_initializer.dart';
 
 class UserLoginPage extends StatefulWidget {
   const UserLoginPage({Key? key}) : super(key: key);
@@ -44,6 +45,10 @@ class _UserLoginPageState extends State<UserLoginPage> {
             'role': 'user',
             'createdAt': FieldValue.serverTimestamp(),
           });
+          
+          // Initialize database with sample data for new user
+          final dbInitializer = DatabaseInitializer();
+          await dbInitializer.initializeDatabase();
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Registration successful! Please login.')),
@@ -67,6 +72,10 @@ class _UserLoginPageState extends State<UserLoginPage> {
           if (userDoc.exists) {
             final role = userDoc.data()?['role'];
             if (role == 'user') {
+              // Initialize database if needed
+              final dbInitializer = DatabaseInitializer();
+              await dbInitializer.initializeDatabase();
+              
               Navigator.pushReplacementNamed(context, '/home');
             } else if (role == 'admin') {
               await FirebaseAuth.instance.signOut();

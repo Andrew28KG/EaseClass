@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../models/room_model.dart';
 import '../models/booking_model.dart';
+import '../models/class_model.dart';
+import '../models/faq_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -13,6 +15,8 @@ class FirestoreService {
   final CollectionReference _roomsCollection = FirebaseFirestore.instance.collection('rooms');
   final CollectionReference _bookingsCollection = FirebaseFirestore.instance.collection('bookings');
   final CollectionReference _ratingsCollection = FirebaseFirestore.instance.collection('ratings');
+  final CollectionReference _classesCollection = FirebaseFirestore.instance.collection('classes');
+  final CollectionReference _faqsCollection = FirebaseFirestore.instance.collection('faqs');
 
   // User operations
   Future<UserModel?> getCurrentUser() async {
@@ -81,6 +85,109 @@ class FirestoreService {
     }
   }
 
+  // Class operations
+  Future<List<ClassModel>> getAvailableClasses() async {
+    try {
+      final QuerySnapshot snapshot = await _classesCollection
+          .where('isAvailable', isEqualTo: true)
+          .get();
+      
+      return snapshot.docs.map((doc) => ClassModel.fromFirestore(doc)).toList();
+    } catch (e) {
+      print('Error getting available classes: $e');
+      return [];
+    }
+  }
+
+  Future<ClassModel?> getClassDetails(String classId) async {
+    try {
+      final DocumentSnapshot doc = await _classesCollection.doc(classId).get();
+      if (doc.exists) {
+        return ClassModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting class details: $e');
+      return null;
+    }
+  }
+
+  Future<List<ClassModel>> filterClasses({
+    String? building,
+    int? minCapacity,
+    List<String>? requiredFeatures,
+    bool? onlyAvailable,
+  }) async {
+    try {
+      Query query = _classesCollection;
+      
+      if (building != null) {
+        query = query.where('building', isEqualTo: building);
+      }
+      
+      if (minCapacity != null) {
+        query = query.where('capacity', isGreaterThanOrEqualTo: minCapacity);
+      }
+      
+      if (onlyAvailable != null && onlyAvailable) {
+        query = query.where('isAvailable', isEqualTo: true);
+      }
+      
+      final QuerySnapshot snapshot = await query.get();
+      List<ClassModel> classes = snapshot.docs.map((doc) => ClassModel.fromFirestore(doc)).toList();
+      
+      // Apply feature filtering (can't be done in Firestore query directly)
+      if (requiredFeatures != null && requiredFeatures.isNotEmpty) {
+        classes = classes.where((classItem) {
+          return requiredFeatures.every((feature) => classItem.features.contains(feature));
+        }).toList();
+      }
+      
+      return classes;
+    } catch (e) {
+      print('Error filtering classes: $e');
+      return [];
+    }
+  }
+
+  // FAQ operations
+  Future<List<FAQModel>> getFAQs({String? category}) async {
+    try {
+      Query query = _faqsCollection.where('isActive', isEqualTo: true);
+      
+      if (category != null) {
+        query = query.where('category', isEqualTo: category);
+      }
+      
+      query = query.orderBy('order');
+      
+      final QuerySnapshot snapshot = await query.get();
+      return snapshot.docs.map((doc) => FAQModel.fromFirestore(doc)).toList();
+    } catch (e) {
+      print('Error getting FAQs: $e');
+      return [];
+    }
+  }
+
+  Future<List<String>> getFAQCategories() async {
+    try {
+      final QuerySnapshot snapshot = await _faqsCollection
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      Set<String> categories = {};
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        categories.add(data['category'] ?? 'General');
+      }
+      
+      return categories.toList();
+    } catch (e) {
+      print('Error getting FAQ categories: $e');
+      return [];
+    }
+  }
+
   // Booking operations
   Future<String?> createBooking({
     required String roomId,
@@ -110,17 +217,34 @@ class FirestoreService {
     }
   }
 
-  Future<List<BookingModel>> getUserBookings() async {
+  Future<bool> updateBookingStatus(String bookingId, String status) async {
+    try {
+      await _bookingsCollection.doc(bookingId).update({
+        'status': status,
+      });
+      return true;
+    } catch (e) {
+      print('Error updating booking status: $e');
+      return false;
+    }
+  }
+
+  Future<List<BookingModel>> getUserBookings({String? status}) async {
     final User? currentUser = _auth.currentUser;
     if (currentUser == null) {
       return [];
     }
 
     try {
-      final QuerySnapshot snapshot = await _bookingsCollection
-          .where('userId', isEqualTo: currentUser.uid)
-          .orderBy('createdAt', descending: true)
-          .get();
+      Query query = _bookingsCollection.where('userId', isEqualTo: currentUser.uid);
+      
+      if (status != null) {
+        query = query.where('status', isEqualTo: status);
+      }
+      
+      query = query.orderBy('createdAt', descending: true);
+      
+      final QuerySnapshot snapshot = await query.get();
       
       final List<BookingModel> bookings = [];
       for (final doc in snapshot.docs) {
@@ -140,6 +264,44 @@ class FirestoreService {
       return bookings;
     } catch (e) {
       print('Error getting user bookings: $e');
+      return [];
+    }
+  }
+
+  Future<List<BookingModel>> getCompletedBookings() async {
+    return getUserBookings(status: 'completed');
+  }
+
+  Future<List<BookingModel>> getOngoingBookings() async {
+    final User? currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return [];
+    }
+
+    try {
+      final QuerySnapshot snapshot = await _bookingsCollection
+          .where('userId', isEqualTo: currentUser.uid)
+          .where('status', whereIn: ['pending', 'upcoming'])
+          .orderBy('createdAt', descending: true)
+          .get();
+      
+      final List<BookingModel> bookings = [];
+      for (final doc in snapshot.docs) {
+        final String roomId = doc['roomId'];
+        final DocumentSnapshot roomDoc = await _roomsCollection.doc(roomId).get();
+        Map<String, dynamic>? roomData;
+        
+        if (roomDoc.exists) {
+          roomData = roomDoc.data() as Map<String, dynamic>;
+          roomData['id'] = roomDoc.id;
+        }
+        
+        bookings.add(BookingModel.fromFirestore(doc, roomData: roomData));
+      }
+      
+      return bookings;
+    } catch (e) {
+      print('Error getting ongoing bookings: $e');
       return [];
     }
   }
@@ -212,6 +374,24 @@ class FirestoreService {
       }).toList();
     } catch (e) {
       print('Error getting room ratings: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getClassRatings(String classId) async {
+    try {
+      final QuerySnapshot snapshot = await _ratingsCollection
+          .where('classId', isEqualTo: classId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print('Error getting class ratings: $e');
       return [];
     }
   }

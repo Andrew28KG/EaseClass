@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'dart:async'; // For auto sliding banner
+import 'dart:math'; // For min function
 import '../utils/navigation_helper.dart'; // Import navigation helper
 import '../services/firestore_service.dart'; // Import Firestore service
 import '../models/user_model.dart'; // Import User model
 import '../models/room_model.dart'; // Import Room model
 import '../models/booking_model.dart'; // Import Booking model
+import '../models/class_model.dart'; // Import Class model
+import '../models/faq_model.dart'; // Import FAQ model
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 
 class HomePage extends StatefulWidget {
@@ -26,30 +29,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   final FirestoreService _firestoreService = FirestoreService();
   UserModel? _currentUser;
   List<RoomModel> _availableRooms = [];
+  List<ClassModel> _availableClasses = [];
   List<BookingModel> _recentBookings = [];
+  List<FAQModel> _faqs = [];
   bool _isLoading = true;
   
-  // Sample events data for the banner
-  final List<Map<String, dynamic>> _events = [
-    {
-      'title': 'New Computer Lab Opening',
-      'description': 'Building A, 3rd Floor',
-      'color': [AppColors.primary, AppColors.primaryLight],
-      'icon': Icons.computer_rounded,
-    },
-    {
-      'title': 'Extended Hours Weekend',
-      'description': 'Reserve rooms until 10PM',
-      'color': [AppColors.secondary, AppColors.secondaryLight],
-      'icon': Icons.access_time_rounded,
-    },
-    {
-      'title': 'Maintenance Notice',
-      'description': 'Building B closed on Saturday',
-      'color': [AppColors.accent, AppColors.accentLight],
-      'icon': Icons.build_rounded,
-    },
-  ];
+  // Banner events will be based on available classes
+  List<Map<String, dynamic>> _events = [];
 
   @override
   void initState() {
@@ -74,23 +60,43 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         // Get available rooms
         final availableRooms = await _firestoreService.getAvailableRooms();
         
-        // Get user bookings
-        final userBookings = await _firestoreService.getUserBookings();
+        // Get available classes
+        final availableClasses = await _firestoreService.getAvailableClasses();
+        
+        // Get user bookings - only completed ones for recent bookings
+        final recentBookings = await _firestoreService.getCompletedBookings();
+        
+        // Get FAQs
+        final faqs = await _firestoreService.getFAQs();
         
         // Sort available rooms by rating
         availableRooms.sort((a, b) => b.rating.compareTo(a.rating));
         
-        // Filter recent completed bookings
-        final recentBookings = userBookings
-            .where((booking) => booking.isCompleted)
-            .take(3)
-            .toList();
+        // Create events from classes
+        final List<Map<String, dynamic>> events = [];
+        
+        // Use the first 3 classes for events
+        for (int i = 0; i < min(3, availableClasses.length); i++) {
+          final classItem = availableClasses[i];
+          events.add({
+            'title': classItem.name,
+            'description': 'Building ${classItem.building}, Floor ${classItem.floor}',
+            'color': [
+              i == 0 ? AppColors.primary : (i == 1 ? AppColors.secondary : AppColors.accent),
+              i == 0 ? AppColors.primaryLight : (i == 1 ? AppColors.secondaryLight : AppColors.accentLight),
+            ],
+            'icon': _getIconForClass(classItem),
+          });
+        }
         
         if (mounted) {
           setState(() {
             _currentUser = currentUser;
             _availableRooms = availableRooms;
-            _recentBookings = recentBookings;
+            _availableClasses = availableClasses;
+            _recentBookings = recentBookings.take(3).toList();
+            _faqs = faqs;
+            _events = events;
             _isLoading = false;
           });
         }
@@ -105,6 +111,26 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           _isLoading = false;
         });
       }
+    }
+  }
+  
+  // Helper method to get icon for a class based on its features or metadata
+  IconData _getIconForClass(ClassModel classItem) {
+    final metadata = classItem.metadata;
+    final courseCode = metadata?['courseCode'] as String? ?? '';
+    
+    if (courseCode.startsWith('CS')) {
+      return Icons.computer_rounded;
+    } else if (courseCode.startsWith('MATH')) {
+      return Icons.calculate_rounded;
+    } else if (courseCode.startsWith('CHEM')) {
+      return Icons.science_rounded;
+    } else if (courseCode.startsWith('PSYC')) {
+      return Icons.psychology_rounded;
+    } else if (courseCode.startsWith('MKT')) {
+      return Icons.trending_up_rounded;
+    } else {
+      return Icons.school_rounded;
     }
   }
 
@@ -211,12 +237,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           
           // Page Content
           SliverToBoxAdapter(
-            child: Padding(
+        child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Welcome Section
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Welcome Section
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Container(
@@ -258,14 +284,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+              const Text(
                                 'Welcome back,',
                                 style: TextStyle(
                                   fontSize: 12, // Smaller text
                                   color: AppColors.darkGrey,
                                 ),
                               ),
-                              Text(
+              Text(
                                 _currentUser?.displayName ?? _currentUser?.email ?? 'User',
                                 style: TextStyle(
                                   fontSize: 16, // Smaller text
@@ -304,12 +330,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
                           child: Text(
                             'What\'s New',
-                            style: TextStyle(
+                style: TextStyle(
                               fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                            ),
-                          ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
                         ),
                         SizedBox(
                           height: 160, // Reduced height
@@ -324,11 +350,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             itemBuilder: (context, index) {
                               return Container(
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
-                                decoration: BoxDecoration(
+                decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                                     colors: [
                                       _events[index]['color'][0],
                                       _events[index]['color'][1],
@@ -373,11 +399,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                                 Text(
                                                   _events[index]['title'],
                                                   style: const TextStyle(
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: AppColors.white,
-                                                  ),
-                                                ),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.white,
+                    ),
+                  ),
                                                 const SizedBox(height: 6),
                                                 Text(
                                                   _events[index]['description'],
@@ -440,7 +466,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   ),
                   const SizedBox(height: 16),
 
-                  // Available Rooms Section
+              // Available Rooms Section
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
@@ -450,13 +476,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Available Rooms',
-                              style: TextStyle(
+              Text(
+                'Available Rooms',
+                style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
                             ),
                             // See All button
                             GestureDetector(
@@ -483,148 +509,150 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
+              ),
+              const SizedBox(height: 10),
+              Container(
                           height: 160, // Reduced from 180
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: 5,
-                            itemBuilder: (context, index) {
-                              return InkWell(
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/room-detail',
-                                    arguments: {
-                                      'roomId': index + 101,
-                                      'building': String.fromCharCode(65 + (index % 3)),
-                                      'floor': (index % 3) + 1,
-                                    },
-                                  );
+                child: _availableRooms.isEmpty
+                    ? Center(child: Text('No available rooms found'))
+                    : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                        itemCount: min(5, _availableRooms.length),
+                  itemBuilder: (context, index) {
+                          final room = _availableRooms[index];
+                          return InkWell(
+                            onTap: () {
+                              NavigationHelper.navigateToRoomDetail(
+                                context,
+                                {
+                                  'roomId': room.id,
+                                  'building': room.building,
+                                  'floor': room.floor,
                                 },
-                                child: Container(
-                                  width: 200, // Slightly reduced
-                                  margin: const EdgeInsets.only(right: 10),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
-                                    border: Border.all(
-                                      color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(10.0),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                              );
+                            },
+                            child: Container(
+                      width: 200,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
+                        border: Border.all(
+                          color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
+                          width: 1,
+                        ),
+                      ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(10.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                'Room ${index + 101}',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                ),
-                                              ),
-                                            ),
-                                            Icon(
-                                              Icons.star,
-                                              color: AppColors.highlight,
-                                              size: 16,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Building ${String.fromCharCode(65 + (index % 3))}',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Floor ${(index % 3) + 1}',
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Capacity: ${20 + (index * 5)} students',
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                        const Spacer(),
-                                        // Rating row
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'Rating: ',
-                                              style: const TextStyle(fontSize: 11),
-                                            ),
-                                            ...List.generate(
-                                              5,
-                                              (starIndex) => Icon(
-                                                starIndex < (4.0 + (index % 2) * 0.5).floor()
-                                                    ? Icons.star
-                                                    : Icons.star_border,
-                                                color: AppColors.highlight,
-                                                size: 10,
-                                              ),
-                                            ),
-                                            SizedBox(width: 2),
-                                            Text(
-                                              '${4.0 + (index % 2) * 0.5}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              'View Details',
-                                              style: TextStyle(
-                                                color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                            Icon(
-                                              Icons.arrow_forward_ios,
-                                              size: 10,
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
                                               color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
                                             ),
-                                          ],
+                                          ),
+                        child: Text(
+                                            'Room ${room.id.substring(0, min(6, room.id.length))}', // Truncate ID for display
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
+                                            ),
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.star,
+                                          color: AppColors.highlight,
+                                          size: 16,
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ),
-                              );
-                            },
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Building ${room.building}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Floor ${room.floor}',
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Capacity: ${room.capacity} students',
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                    const Spacer(),
+                                    // Rating row
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Rating: ',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                        ...List.generate(
+                                          5,
+                                          (starIndex) => Icon(
+                                            starIndex < room.rating.floor() 
+                                                ? Icons.star 
+                                                : (starIndex < room.rating ? Icons.star_half : Icons.star_border),
+                                            color: AppColors.highlight,
+                                            size: 10,
+                                          ),
+                                        ),
+                                        SizedBox(width: 2),
+                                        Text(
+                                          '${room.rating.toStringAsFixed(1)}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          'View Details',
+                          style: TextStyle(
+                            color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
+                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.arrow_forward_ios,
+                                          size: 10,
+                                          color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                           ),
                         ),
+                      ),
+                    );
+                  },
+                ),
+              ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Recently Booked Classes
+              // Recently Booked Classes
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
@@ -633,9 +661,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Recently Booked Classes',
-                              style: TextStyle(
+              Text(
+                'Recently Booked Classes',
+                style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary,
@@ -666,80 +694,109 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           ],
                         ),
                         const SizedBox(height: 10),
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: 3,
-                          itemBuilder: (context, index) {
-                            // Only showing completed bookings
-                            final daysAgo = index + 2; // At least 2 days ago to ensure they're completed
-                            return Card(
-                              child: InkWell(
-                                onTap: () {
-                                  // Navigate to booking detail
-                                  NavigationHelper.navigateToProgressDetail(
-                                    context,
-                                    {
-                                      'bookingId': index + 1,
-                                      'roomId': 101 + index,
-                                      'date': DateTime.now().subtract(Duration(days: daysAgo)).toString().split(' ')[0],
-                                      'time': '${9 + index}:00 - ${10 + index}:00',
-                                      'status': 'Completed',
-                                    },
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Room ${101 + index}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 16,
-                                              ),
-                                            ),
-                                            Text(
-                                              'Date: ${DateTime.now().subtract(Duration(days: daysAgo)).toString().split(' ')[0]}',
-                                              style: TextStyle(color: AppColors.black.withOpacity(0.6), fontSize: 14),
-                                            ),
-                                            Text(
-                                              'Time: ${9 + index}:00 - ${10 + index}:00',
-                                              style: TextStyle(color: AppColors.black.withOpacity(0.6), fontSize: 14),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 16,
-                                        color: AppColors.primary,
-                                      ),
-                                    ],
-                                  ),
+                        _recentBookings.isEmpty 
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  'No completed bookings yet',
+                                  style: TextStyle(color: Colors.grey),
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _recentBookings.length,
+                              itemBuilder: (context, index) {
+                                final booking = _recentBookings[index];
+                                return Card(
+                                  child: InkWell(
+                                    onTap: () {
+                                      // Navigate to booking detail
+                                      NavigationHelper.navigateToProgressDetail(
+                                        context,
+                                        {
+                                          'bookingId': booking.id,
+                                          'roomId': booking.roomId,
+                                          'date': booking.date,
+                                          'time': booking.time,
+                                          'status': booking.status,
+                                          'purpose': booking.purpose,
+                                          'roomDetails': booking.roomDetails,
+                                        },
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12.0),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              color: Colors.green.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(
+                                              Icons.check_circle,
+                                              color: Colors.green,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Date: ${booking.date}',
+                                                  style: TextStyle(color: AppColors.black.withOpacity(0.6), fontSize: 14),
+                                                ),
+                                                Text(
+                                                  'Time: ${booking.time}',
+                                                  style: TextStyle(color: AppColors.black.withOpacity(0.6), fontSize: 14),
+                                                ),
+                                                if (booking.rating != null)
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(top: 4.0),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(Icons.star, color: AppColors.highlight, size: 14),
+                                                        SizedBox(width: 4),
+                                                        Text(
+                                                          'Rating: ${booking.rating?.toStringAsFixed(1)}',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w500,
+                                                            fontSize: 13,
+                                                            color: AppColors.highlight,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 16,
+                                            color: AppColors.primary,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                       ],
                     ),
                   ),
@@ -758,9 +815,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               'Highest Rated Classrooms',
                               style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
                             ),
                             GestureDetector(
                               onTap: () {
@@ -788,13 +845,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 10),
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: 3,
-                          itemBuilder: (context, index) {
+              ),
+              const SizedBox(height: 10),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 3,
+                itemBuilder: (context, index) {
                             final rating = 4.7 + (index * 0.1);
                             final roomFeatures = [
                               ['Smart Projector', 'Air Conditioning', 'Adjustable Lighting'],
@@ -802,7 +859,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               ['Video Conferencing', 'Recording Equipment', 'High-speed Internet']
                             ][index];
                             
-                            return Card(
+                  return Card(
                               elevation: 2,
                               margin: EdgeInsets.only(bottom: 12),
                               shape: RoundedRectangleBorder(
@@ -813,7 +870,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 ),
                               ),
                               child: InkWell(
-                                onTap: () {
+                      onTap: () {
                                   // Navigate to room detail
                                   Navigator.pushNamed(
                                     context,
@@ -958,109 +1015,73 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                     ],
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
+                    ),
+                  );
+                },
+              ),
                       ],
                     ),
                   ),
-                  
-                  // FAQ Section
+
+              // FAQ Section
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Frequently Asked Questions',
-                          style: TextStyle(
+              Text(
+                'Frequently Asked Questions',
+                style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Card(
-                          child: ExpansionTile(
-                            title: const Text('How do I book a class?'),
-                            textColor: AppColors.secondary,
-                            iconColor: AppColors.accent,
-                            children: [
-                              Padding(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 10),
+                        _faqs.isEmpty
+                          ? Center(
+                              child: Padding(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Text(
-                                  'You can book a class by browsing available rooms, selecting a room, choosing your preferred date and time slot, and confirming the booking. The system will then reserve the room for you.',
-                                  style: TextStyle(color: AppColors.black),
+                                  'FAQs are not available',
+                                  style: TextStyle(color: Colors.grey),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        Card(
-                          child: ExpansionTile(
-                            title: const Text('Can I cancel my booking?'),
-                            textColor: AppColors.secondary,
-                            iconColor: AppColors.accent,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'Yes, you can cancel your booking up to 24 hours before the scheduled time without any penalty. Go to My Bookings, select the booking you want to cancel, and tap the Cancel Booking button.',
-                                  style: TextStyle(color: AppColors.black),
-                                ),
+                            )
+                          : Column(
+                              children: _faqs.take(5).map((faq) { // Show first 5 FAQs
+                                return Card(
+                                  child: ExpansionTile(
+                                    title: Text(faq.question),
+                textColor: AppColors.secondary,
+                iconColor: AppColors.accent,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                                          faq.answer,
+                      style: TextStyle(color: AppColors.black),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                        if (_faqs.length > 5)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  // Navigate to full FAQ page
+                                  NavigationHelper.navigateToSettings(context);
+                                },
+                                icon: Icon(Icons.help_outline),
+                                label: Text('See More FAQs'),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                        Card(
-                          child: ExpansionTile(
-                            title: const Text('What equipment is available in rooms?'),
-                            textColor: AppColors.secondary,
-                            iconColor: AppColors.accent,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'Most rooms are equipped with projectors, whiteboards, and air conditioning. Specialized rooms may have additional equipment like computers, lab equipment, or audio-visual systems. Check the room details page for specific information.',
-                                  style: TextStyle(color: AppColors.black),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Card(
-                          child: ExpansionTile(
-                            title: const Text('How early can I book a room?'),
-                            textColor: AppColors.secondary,
-                            iconColor: AppColors.accent,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'You can book rooms up to 30 days in advance. For special events or recurring bookings, please contact the administration office.',
-                                  style: TextStyle(color: AppColors.black),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Card(
-                          child: ExpansionTile(
-                            title: const Text('Can I extend my booking time?'),
-                            textColor: AppColors.secondary,
-                            iconColor: AppColors.accent,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'If the room is available after your booked time slot, you may extend your booking through the app. Go to your current booking and select "Extend Booking" option. Note that extension is subject to availability.',
-                                  style: TextStyle(color: AppColors.black),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),
