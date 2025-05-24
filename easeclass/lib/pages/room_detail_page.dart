@@ -37,13 +37,13 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     _commentsController.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    // Use dynamic types to avoid type conversion errors
-    final dynamic roomId = args['roomId'];
-    final String building = args['building'] ?? '';
-    final dynamic floor = args['floor'];
+    final int roomId = args['roomId'];
+    final String building = args['building'];
+    final int floor = args['floor'];
 
     return Scaffold(
       body: CustomScrollView(

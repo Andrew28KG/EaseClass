@@ -57,8 +57,29 @@ class FirestoreService {
       return false;
     }
   }
-
   // Room operations
+  Future<bool> updateRoomAvailability(String roomId, bool isAvailable) async {
+    try {
+      await _roomsCollection.doc(roomId).update({
+        'isAvailable': isAvailable,
+      });
+      return true;
+    } catch (e) {
+      print('Error updating room availability: $e');
+      return false;
+    }
+  }
+  
+  Future<List<RoomModel>> getRooms() async {
+    try {
+      final QuerySnapshot snapshot = await _roomsCollection.get();
+      return snapshot.docs.map((doc) => RoomModel.fromFirestore(doc)).toList();
+    } catch (e) {
+      print('Error getting rooms: $e');
+      return [];
+    }
+  }
+  
   Future<List<RoomModel>> getAvailableRooms() async {
     try {
       final QuerySnapshot snapshot = await _roomsCollection

@@ -10,6 +10,7 @@ import '../models/booking_model.dart'; // Import Booking model
 import '../models/class_model.dart'; // Import Class model
 import '../models/faq_model.dart'; // Import FAQ model
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import '../services/auth_service.dart'; // Import Auth Service for admin check
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -27,12 +28,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   
   // Firebase services
   final FirestoreService _firestoreService = FirestoreService();
+  final AuthService _authService = AuthService();
   UserModel? _currentUser;
   List<RoomModel> _availableRooms = [];
-  List<ClassModel> _availableClasses = [];
+  List<ClassModel> _recentClasses = []; // Renamed from _availableClasses to use it for Recent Classes
   List<BookingModel> _recentBookings = [];
   List<FAQModel> _faqs = [];
   bool _isLoading = true;
+  bool _isAdmin = false; // Admin flag for conditional rendering
   
   // Banner events will be based on available classes
   List<Map<String, dynamic>> _events = [];
@@ -47,6 +50,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _loadUserData();
   }
 
+  // Load user data from Firebase
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
@@ -55,6 +59,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     try {
       // Get current user
       final currentUser = await _firestoreService.getCurrentUser();
+      
+      // Check if user is admin
+      if (currentUser != null) {
+        final currentFirebaseUser = FirebaseAuth.instance.currentUser;
+        if (currentFirebaseUser != null) {
+          // Check admin status using the authService
+          _isAdmin = await _authService.isCurrentUserAdmin();
+        }
+      }
       
       if (currentUser != null) {
         // Get available rooms
@@ -93,7 +106,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           setState(() {
             _currentUser = currentUser;
             _availableRooms = availableRooms;
-            _availableClasses = availableClasses;
+            _recentClasses = availableClasses;
             _recentBookings = recentBookings.take(3).toList();
             _faqs = faqs;
             _events = events;
@@ -302,18 +315,52 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ],
                           ),
                           Spacer(),
-                          Container(
-                            padding: EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
+                          // Add admin panel button if user is admin
+                          if (_isAdmin)
+                            Container(
+                              padding: EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: GestureDetector(
+                                onTap: () {
+                                  // Navigate to admin dashboard
+                                  NavigationHelper.navigateToAdminDashboard(context);
+                                },
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.admin_panel_settings,
+                                      color: AppColors.secondary,
+                                      size: 18,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Admin',
+                                      style: TextStyle(
+                                        color: AppColors.secondary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Icon(
-                              Icons.notifications_active_outlined,
-                              color: AppColors.primary,
-                              size: 18,
-                            ),
-                          )
+                          if (!_isAdmin)
+                            Container(
+                              padding: EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                Icons.notifications_active_outlined,
+                                color: AppColors.primary,
+                                size: 18,
+                              ),
+                            )
                         ],
                       ),
                     ),
@@ -847,19 +894,29 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           ],
               ),
               const SizedBox(height: 10),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: 3,
-                itemBuilder: (context, index) {
-                            final rating = 4.7 + (index * 0.1);
-                            final roomFeatures = [
-                              ['Smart Projector', 'Air Conditioning', 'Adjustable Lighting'],
-                              ['Surround Sound', 'Smart Boards', 'Ergonomic Furniture'],
-                              ['Video Conferencing', 'Recording Equipment', 'High-speed Internet']
-                            ][index];
-                            
-                  return Card(
+              _recentClasses.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'No rated classrooms available',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: min(3, _recentClasses.length),
+                    itemBuilder: (context, index) {
+                      final classItem = _recentClasses[index];
+                      final roomFeatures = [
+                        ['Smart Projector', 'Air Conditioning', 'Adjustable Lighting'],
+                        ['Surround Sound', 'Smart Boards', 'Ergonomic Furniture'],
+                        ['Video Conferencing', 'Recording Equipment', 'High-speed Internet']
+                      ][index % 3]; // Use modulo to handle any number of classes
+                      
+                      return Card(
                               elevation: 2,
                               margin: EdgeInsets.only(bottom: 12),
                               shape: RoundedRectangleBorder(
@@ -872,13 +929,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               child: InkWell(
                       onTap: () {
                                   // Navigate to room detail
-                                  Navigator.pushNamed(
+                                  NavigationHelper.navigateToRoomDetail(
                                     context,
-                                    '/room-detail',
-                                    arguments: {
-                                      'roomId': 201 + index,
-                                      'building': String.fromCharCode(65 + (index % 3)),
-                                      'floor': (index % 3) + 1,
+                                    {
+                                      'roomId': classItem.id,
+                                      'building': classItem.building,
+                                      'floor': classItem.floor,
                                     },
                                   );
                                 },
@@ -912,38 +968,38 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                                 Row(
                                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                   children: [
-                                                    Text(
-                                                      'Premium Room ${201 + index}',
-                                                      style: const TextStyle(
-                                                        fontWeight: FontWeight.w600,
-                                                        fontSize: 16,
+                                                      Text(
+                                                        'Premium Room ${classItem.id.substring(0, min(6, classItem.id.length))}',
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.w600,
+                                                          fontSize: 16,
+                                                        ),
                                                       ),
-                                                    ),
-                                                    Container(
-                                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors.highlight.withOpacity(0.2),
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.star, color: AppColors.highlight, size: 16),
-                                                          SizedBox(width: 2),
-                                                          Text(
-                                                            rating.toStringAsFixed(1),
-                                                            style: TextStyle(
-                                                              fontWeight: FontWeight.bold,
-                                                              color: AppColors.highlight,
+                                                      Container(
+                                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: AppColors.highlight.withOpacity(0.2),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.star, color: AppColors.highlight, size: 16),
+                                                            SizedBox(width: 2),
+                                                            Text(
+                                                              classItem.rating.toStringAsFixed(1),
+                                                              style: TextStyle(
+                                                                fontWeight: FontWeight.bold,
+                                                                color: AppColors.highlight,
+                                                              ),
                                                             ),
-                                                          ),
-                                                        ],
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ),
                                                   ],
                                                 ),
                                                 SizedBox(height: 6),
                                                 Text(
-                                                  'Building ${String.fromCharCode(65 + (index % 3))}, Floor ${(index % 3) + 1}',
+                                                  'Building ${classItem.building}, Floor ${classItem.floor}',
                                                   style: TextStyle(
                                                     color: AppColors.black.withOpacity(0.7),
                                                     fontSize: 14,
@@ -951,7 +1007,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                                 ),
                                                 SizedBox(height: 4),
                                                 Text(
-                                                  'Capacity: ${30 + (index * 10)} students',
+                                                  'Capacity: ${classItem.capacity} students',
                                                   style: TextStyle(
                                                     color: AppColors.black.withOpacity(0.7),
                                                     fontSize: 14,
@@ -1093,4 +1149,4 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       ),
     );
   }
-} 
+}

@@ -75,10 +75,15 @@ class NavigationHelper {
   static void navigateToSettings(BuildContext context) {
     navigateToTab(context, 3);
   }
-  
-  /// Navigate to user login page
+    /// Navigate to user login page
   static void navigateToLogin(BuildContext context) {
     Navigator.of(context, rootNavigator: true)
-        .pushNamedAndRemoveUntil('/user-login', (route) => false);
+        .pushNamedAndRemoveUntil('/login', (route) => false);
   }
-} 
+
+  /// Navigate to admin dashboard
+  static void navigateToAdminDashboard(BuildContext context) {
+    Navigator.of(context, rootNavigator: true)
+        .pushNamed('/admin-dashboard');
+  }
+}

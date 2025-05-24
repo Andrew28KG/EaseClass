@@ -50,7 +50,6 @@ class BookingModel {
       userDetails: userData,
     );
   }
-
   Map<String, dynamic> toMap() {
     return {
       'roomId': roomId,
@@ -64,8 +63,25 @@ class BookingModel {
       'feedback': feedback,
     };
   }
+  
+  factory BookingModel.fromMap(Map<String, dynamic> map) {
+    return BookingModel(
+      id: map['id'] ?? '',
+      roomId: map['roomId'] ?? '',
+      userId: map['userId'] ?? '',
+      date: map['date'] ?? '',
+      time: map['time'] ?? '',
+      purpose: map['purpose'] ?? '',
+      status: map['status'] ?? 'pending',
+      createdAt: map['createdAt'] ?? Timestamp.now(),
+      rating: map['rating']?.toDouble(),
+      feedback: map['feedback'],
+      roomDetails: map['roomDetails'],
+      userDetails: map['userDetails'],
+    );
+  }
 
   bool get isActive => status == 'pending' || status == 'upcoming';
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
-} 
+}

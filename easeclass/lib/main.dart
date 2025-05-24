@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'theme/app_colors.dart';
 import 'pages/home_page.dart';
 import 'pages/available_rooms_page.dart';
 import 'pages/room_detail_page.dart';
-import 'pages/progress_page.dart';
+import 'pages/bookings_page.dart'; // Changed from progress_page.dart
 import 'pages/progress_detail_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/booking_confirmation_page.dart';
 import 'pages/rating_page.dart';
-import 'pages/user_login_page.dart';
-import 'pages/admin_login_page.dart';
-import 'pages/admin_dashboard_page.dart';
+import 'pages/auth_page.dart'; // Changed from user_login_page
+import 'pages/admin_main_page.dart'; // Added admin_main_page
+import 'pages/manage_page.dart'; // Added manage_page
 import 'services/database_initializer.dart';
+import 'services/auth_service.dart'; // Added auth_service
+import 'pages/admin_login_page.dart'; // Added admin_login_page
 
 Future<void> initializeFirebase() async {
   try {
@@ -36,8 +40,22 @@ void main() async {
   // Initialize database with sample data
   final dbInitializer = DatabaseInitializer();
   await dbInitializer.initializeDatabase();
-  
-  runApp(const MyApp());
+    // Create an instance of AuthService
+  final authService = AuthService();
+  runApp(
+    MultiProvider(
+      providers: [
+        StreamProvider<User?>(
+          create: (_) => authService.authStateChanges,
+          initialData: null,
+        ),
+        Provider<AuthService>(
+          create: (_) => authService,
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -153,12 +171,26 @@ class MyApp extends StatelessWidget {
           ),
           behavior: SnackBarBehavior.floating,
         ),
-      ),
-      home: const UserLoginPage(),
-      routes: {
-        '/user-login': (context) => const UserLoginPage(),
+      ),      // Authentication Routing Logic
+      home: Provider.of<User?>(context) == null 
+          ? const AuthPage() 
+          : FutureBuilder<bool>(
+              future: Provider.of<AuthService>(context, listen: false).isCurrentUserAdmin(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                
+                final isAdmin = snapshot.data ?? false;
+                return isAdmin ? const AdminMainPage() : const MainPage();
+              },
+            ),
+        routes: {
+        '/login': (context) => const AuthPage(),
         '/admin-login': (context) => const AdminLoginPage(),
-        '/admin-dashboard': (context) => const AdminDashboardPage(),
+        '/admin-dashboard': (context) => const AdminMainPage(),
         '/home': (context) => const MainPage(),
         '/room-detail': (context) => const RoomDetailPage(),
         '/booking-confirmation': (context) => const BookingConfirmationPage(),
@@ -251,30 +283,50 @@ class _MainPageState extends State<MainPage> {
               },
               settings: settings,
             );
-          }
-
-          // Default page for each tab
+          }          // Default page for each tab
           return MaterialPageRoute(
             builder: (context) {
-              switch (index) {
-                case 0:
-                  return const HomePage();
-                case 1:
-                  return const AvailableRoomsPage();
-                case 2:
-                  return const ProgressPage();
-                case 3:
-                  return const SettingsPage();
-                default:
-                  return const HomePage();
-              }
+              // Check if the user is admin to determine the correct tab index mapping
+              return FutureBuilder<bool>(
+                future: Provider.of<AuthService>(context, listen: false).isCurrentUserAdmin(),
+                builder: (context, snapshot) {
+                  final bool isAdminUser = snapshot.connectionState == ConnectionState.done ? (snapshot.data ?? false) : false;
+                  
+                  switch (index) {
+                    case 0:
+                      return const HomePage();
+                    case 1:
+                      return const AvailableRoomsPage();
+                    case 2:
+                      if (isAdminUser) {
+                        // For admins, tab 2 is Management
+                        final manageTabIndex = settings.arguments is int ? settings.arguments as int : null;
+                        return ManagePage(initialTabIndex: manageTabIndex);
+                      } else {
+                        // For regular users, tab 2 is Bookings
+                        return const BookingsPage();
+                      }
+                    case 3:
+                      if (isAdminUser) {
+                        // For admins, tab 3 is Bookings
+                        return const BookingsPage();
+                      } else {
+                        // For regular users, tab 3 is Profile
+                        return const SettingsPage();
+                      }
+                    case 4:
+                      return const SettingsPage();
+                    default:
+                      return const HomePage();
+                  }
+                },
+              );
             },
           );
         },
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -310,13 +362,21 @@ class _MainPageState extends State<MainPage> {
         return true;
       },
       child: Scaffold(
-        body: Stack(
-          children: [
-            _buildPageNavigator(0),
-            _buildPageNavigator(1),
-            _buildPageNavigator(2),
-            _buildPageNavigator(3),
-          ],
+        body: FutureBuilder<bool>(
+          future: Provider.of<AuthService>(context, listen: false).isCurrentUserAdmin(),
+          builder: (context, snapshot) {
+            final isAdmin = snapshot.data ?? false;
+            
+            return Stack(
+              children: [
+                _buildPageNavigator(0),
+                _buildPageNavigator(1),
+                _buildPageNavigator(2),
+                isAdmin ? _buildPageNavigator(3) : const SizedBox.shrink(),
+                isAdmin ? _buildPageNavigator(4) : _buildPageNavigator(3),
+              ],
+            );
+          },
         ),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
@@ -330,31 +390,45 @@ class _MainPageState extends State<MainPage> {
           ),
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: BottomNavigationBar(
-              items: <BottomNavigationBarItem>[
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.dashboard),
-                  activeIcon: Icon(Icons.dashboard_rounded),
-                  label: 'Dashboard',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.meeting_room_outlined),
-                  activeIcon: Icon(Icons.meeting_room_rounded),
-                  label: 'Available Rooms',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.history_outlined),
-                  activeIcon: Icon(Icons.history_rounded),
-                  label: 'Progress',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
-                ),
-              ],
-              currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
+            child: FutureBuilder<bool>(
+              future: Provider.of<AuthService>(context, listen: false).isCurrentUserAdmin(),
+              builder: (context, snapshot) {
+                final isAdmin = snapshot.data ?? false;
+                
+                // Determine the actual index to highlight in the bottom navigation bar
+                return BottomNavigationBar(
+                  items: <BottomNavigationBarItem>[
+                    const BottomNavigationBarItem(
+                      icon: Icon(Icons.dashboard),
+                      activeIcon: Icon(Icons.dashboard_rounded),
+                      label: 'Dashboard',
+                    ),
+                    const BottomNavigationBarItem(
+                      icon: Icon(Icons.meeting_room_outlined),
+                      activeIcon: Icon(Icons.meeting_room_rounded),
+                      label: 'Available Rooms',
+                    ),
+                    if (isAdmin)
+                      const BottomNavigationBarItem(
+                        icon: Icon(Icons.admin_panel_settings_outlined),
+                        activeIcon: Icon(Icons.admin_panel_settings),
+                        label: 'Management',
+                      ),
+                    const BottomNavigationBarItem(
+                      icon: Icon(Icons.history_outlined),
+                      activeIcon: Icon(Icons.history_rounded),
+                      label: 'Bookings',
+                    ),
+                    const BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline),
+                      activeIcon: Icon(Icons.person_rounded),
+                      label: 'Profile',
+                    ),
+                  ],
+                  currentIndex: _selectedIndex,
+                  onTap: _onItemTapped,
+                );
+              },
             ),
           ),
         ),

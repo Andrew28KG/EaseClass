@@ -50,7 +50,6 @@ class ClassModel {
       metadata: data['metadata'],
     );
   }
-
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -65,4 +64,28 @@ class ClassModel {
       'metadata': metadata,
     };
   }
-} 
+  
+  factory ClassModel.fromMap(Map<String, dynamic> map) {
+    // Handle features list
+    List<String> featuresList = [];
+    if (map['features'] != null) {
+      if (map['features'] is List) {
+        featuresList = List<String>.from(map['features']);
+      }
+    }
+    
+    return ClassModel(
+      id: map['id'] ?? '',
+      name: map['name'] ?? '',
+      description: map['description'] ?? '',
+      building: map['building'] ?? '',
+      floor: map['floor'] ?? 1,
+      capacity: map['capacity'] ?? 20,
+      rating: (map['rating'] ?? 0.0).toDouble(),
+      isAvailable: map['isAvailable'] ?? true,
+      features: featuresList,
+      imageUrl: map['imageUrl'],
+      metadata: map['metadata'],
+    );
+  }
+}
