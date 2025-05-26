@@ -1,0 +1,447 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/booking_service.dart';
+import '../../models/booking_model.dart';
+import '../../theme/app_colors.dart';
+import 'user_booking_detail_page.dart';
+
+class UserBookedRoomsPage extends StatefulWidget {
+  const UserBookedRoomsPage({Key? key}) : super(key: key);
+
+  @override
+  State<UserBookedRoomsPage> createState() => _UserBookedRoomsPageState();
+}
+
+class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTickerProviderStateMixin {
+  final BookingService _bookingService = BookingService();
+  late TabController _tabController;
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _allBookings = [];
+  List<Map<String, dynamic>> _filteredBookings = [];
+  String _selectedFilter = 'All';
+
+  final List<String> _filterOptions = [
+    'All',
+    'Pending',
+    'Approved',
+    'Completed',
+    'Cancelled',
+    'This Week',
+    'This Month',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadBookings();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBookings() async {
+    setState(() => _isLoading = true);
+    try {
+      final allBookings = await _bookingService.getUserBookings().first;
+      if (mounted) {
+        setState(() {
+          _allBookings = allBookings.map((booking) => {
+            'id': booking.id,
+            'roomId': booking.roomId,
+            'roomName': booking.roomDetails?['name'] ?? 'Room ${booking.roomId}',
+            'building': booking.roomDetails?['building'] ?? '-',
+            'floor': booking.roomDetails?['floor']?.toString() ?? '-',
+            'capacity': booking.roomDetails?['capacity'] ?? 0,
+            'features': booking.roomDetails?['features'] ?? [],
+            'date': booking.date,
+            'time': booking.time,
+            'purpose': booking.purpose,
+            'status': booking.status,
+            'createdAt': booking.createdAt.toDate(),
+            'userName': booking.userDetails?['name'] ?? 'Anonymous',
+          }).toList();
+          _allBookings.sort((a, b) => b['createdAt'].compareTo(a['createdAt']));
+          _applyFilter();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading bookings: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _applyFilter() {
+    switch (_selectedFilter) {
+      case 'Pending':
+        _filteredBookings = _allBookings.where((booking) => 
+          booking['status'] == 'pending' || booking['status'] == 'process'
+        ).toList();
+        break;
+      case 'Approved':
+        _filteredBookings = _allBookings.where((booking) => 
+          booking['status'] == 'approved'
+        ).toList();
+        break;
+      case 'Completed':
+        _filteredBookings = _allBookings.where((booking) => 
+          booking['status'] == 'completed'
+        ).toList();
+        break;
+      case 'Cancelled':
+        _filteredBookings = _allBookings.where((booking) => 
+          booking['status'] == 'cancelled' || booking['status'] == 'rejected'
+        ).toList();
+        break;
+      case 'This Week':
+        final now = DateTime.now();
+        final weekStart = now.subtract(Duration(days: now.weekday - 1));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        _filteredBookings = _allBookings.where((booking) {
+          final bookingDate = booking['createdAt'] as DateTime;
+          return bookingDate.isAfter(weekStart.subtract(const Duration(days: 1))) &&
+                 bookingDate.isBefore(weekEnd.add(const Duration(days: 1)));
+        }).toList();
+        break;
+      case 'This Month':
+        final now = DateTime.now();
+        _filteredBookings = _allBookings.where((booking) {
+          final bookingDate = booking['createdAt'] as DateTime;
+          return bookingDate.year == now.year && bookingDate.month == now.month;
+        }).toList();
+        break;
+      default:
+        _filteredBookings = List.from(_allBookings);
+    }
+  }
+
+  Widget _buildFilterChip(String filter) {
+    final isSelected = _selectedFilter == filter;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(
+          filter,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.darkGrey,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        selected: isSelected,
+        onSelected: (selected) {
+          setState(() {
+            _selectedFilter = filter;
+            _applyFilter();
+          });
+        },
+        backgroundColor: Colors.white,
+        selectedColor: AppColors.primary,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: isSelected ? AppColors.primary : AppColors.lightGrey,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookingCard(Map<String, dynamic> booking) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: _getStatusColor(booking['status']).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => _navigateToBookingDetail(booking),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.meeting_room,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          booking['roomName'] ?? 'Unknown Room',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Building ${booking['building']}, Floor ${booking['floor']}',
+                          style: TextStyle(
+                            color: AppColors.darkGrey,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildStatusChip(booking['status']),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildInfoRow(Icons.calendar_today, '${booking['date']} | ${booking['time']}'),
+              const SizedBox(height: 8),
+              _buildInfoRow(Icons.description, booking['purpose'] ?? 'No purpose specified'),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'Tap to view details',
+                    style: TextStyle(
+                      color: AppColors.darkGrey.withOpacity(0.7),
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 12,
+                    color: AppColors.darkGrey.withOpacity(0.7),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.darkGrey),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: AppColors.darkGrey,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _getStatusColor(status).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        _getStatusText(status),
+        style: TextStyle(
+          color: _getStatusColor(status),
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  String _getStatusText(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'process':
+        return '⏱️ Pending';
+      case 'approved':
+        return '✅ Approved';
+      case 'completed':
+        return '✓ Completed';
+      case 'cancelled':
+        return '❌ Cancelled';
+      case 'rejected':
+        return '❌ Rejected';
+      default:
+        return status;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'process':
+        return AppColors.warning;
+      case 'approved':
+        return AppColors.success;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  void _navigateToBookingDetail(Map<String, dynamic> bookingData) {
+    final bookingModel = BookingModel(
+      id: bookingData['id'] ?? '',
+      userId: bookingData['userId'] ?? '',
+      roomId: bookingData['roomId'] ?? '',
+      date: bookingData['date'] ?? '',
+      time: bookingData['time'] ?? '',
+      purpose: bookingData['purpose'] ?? '',
+      status: bookingData['status'] ?? 'pending',
+      createdAt: Timestamp.fromDate(bookingData['createdAt'] ?? DateTime.now()),
+      roomDetails: {
+        'name': bookingData['roomName'],
+        'building': bookingData['building'],
+        'floor': bookingData['floor'],
+        'capacity': bookingData['capacity'],
+        'features': bookingData['features'],
+      },
+      userDetails: {
+        'name': bookingData['userName'],
+      },
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserBookingDetailPage(
+          booking: bookingModel,
+          onBookingUpdated: _loadBookings,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('My Bookings'),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.primary,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.darkGrey,
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          tabs: const [
+            Tab(text: 'Booked Rooms'),
+            Tab(text: 'History'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildMainContent(),
+          _buildMainContent(), // You can create a separate view for history if needed
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      children: [
+        Container(
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _filterOptions.length,
+            itemBuilder: (context, index) => _buildFilterChip(_filterOptions[index]),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadBookings,
+            child: _filteredBookings.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.meeting_room_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No bookings found',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Try changing your filters',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _filteredBookings.length,
+                    itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index]),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
