@@ -4,6 +4,7 @@ import '../../services/booking_service.dart';
 import '../../models/booking_model.dart';
 import '../../theme/app_colors.dart';
 import 'user_booking_detail_page.dart';
+import 'user_booking_history_page.dart';
 
 class UserBookedRoomsPage extends StatefulWidget {
   const UserBookedRoomsPage({Key? key}) : super(key: key);
@@ -348,28 +349,11 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('My Bookings'),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.primary,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.darkGrey,
-          indicatorColor: AppColors.primary,
-          indicatorWeight: 3,
-          tabs: const [
-            Tab(text: 'Booked Rooms'),
-            Tab(text: 'History'),
-          ],
-        ),
-      ),
       body: TabBarView(
         controller: _tabController,
         children: [
           _buildMainContent(),
-          _buildMainContent(), // You can create a separate view for history if needed
+          UserBookingHistoryPage(),
         ],
       ),
     );
@@ -382,25 +366,6 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
 
     return Column(
       children: [
-        Container(
-          height: 60,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _filterOptions.length,
-            itemBuilder: (context, index) => _buildFilterChip(_filterOptions[index]),
-          ),
-        ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadBookings,

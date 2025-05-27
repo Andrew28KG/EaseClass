@@ -11,6 +11,8 @@ import '../../models/class_model.dart'; // Import Class model
 import '../../models/faq_model.dart'; // Import FAQ model
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import '../../services/auth_service.dart'; // Import Auth Service for admin check
+import '../../services/event_service.dart'; // Import Event Service
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore for Timestamp if needed, though EventModel handles it
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -21,8 +23,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   final PageController _bannerController = PageController();
-  int _currentBannerIndex = 0;
-  Timer? _bannerTimer;
   late AnimationController _animationController;
   Animation<double> _fadeAnimation = AlwaysStoppedAnimation(1.0);
   
@@ -37,71 +37,37 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   bool _isLoading = true;
   bool _isAdmin = false; // Admin flag for conditional rendering
   
-  // Banner events will be based on available classes
-  List<Map<String, dynamic>> _events = [];
+  // Use a Stream to get events from Firestore
+  final EventService _eventService = EventService();
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
-    // Start auto-sliding banner
-    _startBannerTimer();
-    // Load user data from Firebase
-    _loadUserData();
+    _loadUserData(); // Initial load of user data
   }
 
-  // Load user data from Firebase
+  // Load user data from Firebase (excluding event stream)
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
     });
     
     try {
-      // Get current user
       final currentUser = await _firestoreService.getCurrentUser();
-      
-      // Check if user is admin
       if (currentUser != null) {
         final currentFirebaseUser = FirebaseAuth.instance.currentUser;
         if (currentFirebaseUser != null) {
-          // Check admin status using the authService
           _isAdmin = await _authService.isCurrentUserAdmin();
         }
-      }
-      
-      if (currentUser != null) {
-        // Get available rooms
+
         final availableRooms = await _firestoreService.getAvailableRooms();
-        
-        // Get available classes
         final availableClasses = await _firestoreService.getAvailableClasses();
-        
-        // Get user bookings - upcoming and pending ones for current bookings
         final currentBookings = await _firestoreService.getOngoingBookings();
-        
-        // Get FAQs
         final faqs = await _firestoreService.getFAQs();
-        
-        // Sort available rooms by rating
+
         availableRooms.sort((a, b) => b.rating.compareTo(a.rating));
-        
-        // Create events from classes
-        final List<Map<String, dynamic>> events = [];
-        
-        // Use the first 3 classes for events
-        for (int i = 0; i < min(3, availableClasses.length); i++) {
-          final classItem = availableClasses[i];
-          events.add({
-            'title': classItem.name,
-            'description': 'Building ${classItem.building}, Floor ${classItem.floor}',
-            'color': [
-              i == 0 ? AppColors.primary : (i == 1 ? AppColors.secondary : AppColors.accent),
-              i == 0 ? AppColors.primaryLight : (i == 1 ? AppColors.secondaryLight : AppColors.accentLight),
-            ],
-            'icon': _getIconForClass(classItem),
-          });
-        }
-        
+
         if (mounted) {
           setState(() {
             _currentUser = currentUser;
@@ -109,12 +75,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             _recentClasses = availableClasses;
             _recentBookings = currentBookings.take(3).toList();
             _faqs = faqs;
-            _events = events;
             _isLoading = false;
           });
         }
       } else {
-        // If no user is logged in, navigate to login page
         NavigationHelper.navigateToLogin(context);
       }
     } catch (e) {
@@ -124,26 +88,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           _isLoading = false;
         });
       }
-    }
-  }
-  
-  // Helper method to get icon for a class based on its features or metadata
-  IconData _getIconForClass(ClassModel classItem) {
-    final metadata = classItem.metadata;
-    final courseCode = metadata?['courseCode'] as String? ?? '';
-    
-    if (courseCode.startsWith('CS')) {
-      return Icons.computer_rounded;
-    } else if (courseCode.startsWith('MATH')) {
-      return Icons.calculate_rounded;
-    } else if (courseCode.startsWith('CHEM')) {
-      return Icons.science_rounded;
-    } else if (courseCode.startsWith('PSYC')) {
-      return Icons.psychology_rounded;
-    } else if (courseCode.startsWith('MKT')) {
-      return Icons.trending_up_rounded;
-    } else {
-      return Icons.school_rounded;
     }
   }
 
@@ -164,28 +108,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
-    _bannerTimer?.cancel();
     _bannerController.dispose();
     _animationController.dispose();
     super.dispose();
-  }
-
-  void _startBannerTimer() {
-    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_currentBannerIndex < _events.length - 1) {
-        _currentBannerIndex++;
-      } else {
-        _currentBannerIndex = 0;
-      }
-      
-      if (_bannerController.hasClients) {
-        _bannerController.animateToPage(
-          _currentBannerIndex,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
   }
 
   @override
@@ -363,253 +288,34 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 ),
               ),
                         ),
-                        SizedBox(
-                          height: 160, // Reduced height
-                          child: PageView.builder(
-                            controller: _bannerController,
-                            itemCount: _events.length,
-                            onPageChanged: (index) {
-                              setState(() {
-                                _currentBannerIndex = index;
-                              });
-                            },
-                            itemBuilder: (context, index) {
-                              return GestureDetector(
-                                onTap: () {
-                                  // Show popup dialog with event details
-                                  showDialog(
-                                    context: context,
-                                    builder: (BuildContext context) {
-                                      return Dialog(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                        ),
-                                        elevation: 0,
-                                        backgroundColor: Colors.transparent,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(20),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(16),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.1),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  CircleAvatar(
-                                                    radius: 20,
-                                                    backgroundColor: _events[index]['color'][0],
-                                                    child: Icon(
-                                                      _events[index]['icon'],
-                                                      color: Colors.white,
-                                                      size: 20,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Text(
-                                                      _events[index]['title'],
-                                                      style: TextStyle(
-                                                        fontSize: 18,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: AppColors.primary,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.close),
-                                                    onPressed: () => Navigator.pop(context),
-                                                  ),
-                                                ],
-                                              ),
-                                              const Divider(height: 24),
-                                              Text(
-                                                'Description',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppColors.secondary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                _events[index]['description'],
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 16),
-                                              Text(
-                                                'Location',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppColors.secondary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'Building ${_events[index]['description'].toString().split(', ')[0].replaceAll('Building ', '')}',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 20),
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment.end,
-                                                children: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(context),
-                                                    child: Text(
-                                                      'Close',
-                                                      style: TextStyle(color: AppColors.secondary),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  ElevatedButton(
-                                                    onPressed: () {
-                                                      Navigator.pop(context);
-                                                      // Additional action if needed
-                                                    },
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: _events[index]['color'][0],
-                                                      foregroundColor: Colors.white,
-                                                    ),
-                                                    child: const Text('Learn More'),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        _events[index]['color'][0],
-                                        _events[index]['color'][1],
-                                      ],
-                                    ),
-                                    boxShadow: [AppColors.cardShadow],
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      // Background decoration
-                                      Positioned(
-                                        right: -40,
-                                        top: -40,
-                                        child: CircleAvatar(
-                                          radius: 80,
-                                          backgroundColor: Colors.white.withOpacity(0.1),
-                                        ),
-                                      ),
-                                      // Content
-                                      Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                          children: [
-                                            // Event icon
-                                            CircleAvatar(
-                                              radius: 28,
-                                              backgroundColor: Colors.white.withOpacity(0.2),
-                                              child: Icon(
-                                                _events[index]['icon'],
-                                                color: Colors.white,
-                                                size: 28,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            // Event details
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Text(
-                                                    _events[index]['title'],
-                                                    style: const TextStyle(
-                                                      fontSize: 20,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: AppColors.white,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    _events[index]['description'],
-                                                    style: const TextStyle(
-                                                      fontSize: 14,
-                                                      color: AppColors.white,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 12),
-                                                  // Learn more button
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white.withOpacity(0.2),
-                                                      borderRadius: BorderRadius.circular(20),
-                                                    ),
-                                                    child: const Text(
-                                                      'Learn more',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight: FontWeight.bold,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                        // Use StreamBuilder to listen to events from Firestore
+                        StreamBuilder<List<EventModel>>(
+                          stream: _eventService.getEventsStream(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snapshot.hasError) {
+                              return Center(child: Text('Error loading events: ${snapshot.error}'));
+                            }
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              // Stop the timer if there are no events
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text('No events available yet.', style: TextStyle(color: Colors.grey[600])), // Added subtle styling
                                 ),
                               );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Banner Indicators
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            _events.length,
-                            (index) => AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: index == _currentBannerIndex ? 20 : 8,
-                              height: 8,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(4),
-                                color: index == _currentBannerIndex 
-                                    ? AppColors.primary 
-                                    : AppColors.grey,
-                              ),
-                            ),
-                          ),
+                            }
+
+                            final List<EventModel> events = snapshot.data!;
+
+                            // Pass events to the new slider widget
+                            return _EventSliderWidget(
+                              events: events,
+                              bannerController: _bannerController,
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -1274,6 +980,335 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// New StatefulWidget to manage the event slider and its index state
+class _EventSliderWidget extends StatefulWidget {
+  final List<EventModel> events;
+  final PageController bannerController;
+
+  const _EventSliderWidget({
+    Key? key,
+    required this.events,
+    required this.bannerController,
+  }) : super(key: key);
+
+  @override
+  __EventSliderWidgetState createState() => __EventSliderWidgetState();
+}
+
+class __EventSliderWidgetState extends State<_EventSliderWidget> {
+  Timer? _bannerTimer;
+  int _currentBannerIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startBannerTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventSliderWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Restart timer if the list of events changes
+    if (widget.events.length != oldWidget.events.length) {
+      _startBannerTimer();
+    } else if (widget.events.isNotEmpty && oldWidget.events.isNotEmpty) {
+       // Check if content of events changed (simple check)
+       bool contentChanged = false;
+       for(int i = 0; i < widget.events.length; i++){
+         if(widget.events[i].id != oldWidget.events[i].id || 
+            widget.events[i].title != oldWidget.events[i].title || 
+            widget.events[i].description != oldWidget.events[i].description || 
+            widget.events[i].imageUrl != oldWidget.events[i].imageUrl){
+           contentChanged = true;
+           break;
+         }
+       }
+       if(contentChanged) {
+         _startBannerTimer();
+       }
+    }
+  }
+
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startBannerTimer() {
+    _bannerTimer?.cancel(); // Cancel any existing timer
+    if (widget.events.isNotEmpty) {
+      _bannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+        int nextIndex = _currentBannerIndex + 1;
+        if (nextIndex >= widget.events.length) {
+          nextIndex = 0;
+        }
+        if (widget.bannerController.hasClients) {
+           widget.bannerController.animateToPage(
+             nextIndex,
+             duration: const Duration(milliseconds: 500),
+             curve: Curves.easeInOut,
+           );
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final events = widget.events;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 200, // Increased height to allow more space for description
+          child: PageView.builder(
+            controller: widget.bannerController,
+            itemCount: events.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentBannerIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              final event = events[index];
+              return _buildEventCard(context, event); // Use the helper
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Banner Indicators
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            events.length,
+            (index) => AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: index == _currentBannerIndex ? 20 : 8,
+              height: 8,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                color: index == _currentBannerIndex
+                    ? AppColors.primary
+                    : AppColors.grey,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper method to build an event card for the banner
+  Widget _buildEventCard(BuildContext context, EventModel event) {
+    return GestureDetector(
+      onTap: () {
+        // Show popup dialog with event details
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: AppColors.primary,
+                          child: Icon(
+                            Icons.event,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    Text(
+                      'Description',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      event.description,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    if (event.imageUrl.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          event.imageUrl,
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600]),
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            'Close',
+                            style: TextStyle(color: AppColors.secondary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [AppColors.cardShadow],
+        ),
+        child: Stack(
+          children: [
+            // Background image
+            if (event.imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.network(
+                  event.imageUrl,
+                  height: double.infinity,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey[300],
+                    child: Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600])),
+                  ),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            // Gradient Overlay for text readability
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.7),
+                  ],
+                  stops: const [0.5, 1.0],
+                ),
+              ),
+            ),
+
+            // Content (Title and Description)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    event.description,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                    maxLines: 3, // Increase max lines to show more description on the card
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

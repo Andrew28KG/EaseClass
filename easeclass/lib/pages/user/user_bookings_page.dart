@@ -32,30 +32,22 @@ class _UserBookingsPageState extends State<UserBookingsPage>
         title: const Text('Booked Rooms'),
         centerTitle: true,
         backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
         elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white.withOpacity(0.7),
+          indicatorColor: Colors.white,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          tabs: const [
+            Tab(text: 'Booked Rooms'),
+            Tab(text: 'History'),
+          ],
+        ),
       ),
       body: Column(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withOpacity(0.7),
-              indicatorColor: Colors.white,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-              tabs: const [
-                Tab(text: 'Booked Rooms'),
-                Tab(text: 'History'),
-              ],
-            ),
-          ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
