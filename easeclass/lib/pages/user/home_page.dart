@@ -522,9 +522,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 child: _availableRooms.isEmpty
                     ? Center(child: Text('No available classrooms found'))
                     : ListView.builder(
-                        scrollDirection: Axis.horizontal,
+                  scrollDirection: Axis.horizontal,
                         itemCount: min(5, _availableRooms.length),
-                        itemBuilder: (context, index) {
+                  itemBuilder: (context, index) {
                           final room = _availableRooms[index];
                           return InkWell(
                             onTap: () {
@@ -538,16 +538,16 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               );
                             },
                             child: Container(
-                              width: 200,
-                              margin: const EdgeInsets.only(right: 10),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
-                                border: Border.all(
-                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                  width: 1,
-                                ),
-                              ),
+                      width: 200,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
+                        border: Border.all(
+                          color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
+                          width: 1,
+                        ),
+                      ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -601,7 +601,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                                   color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
                                                 ),
                                               ),
-                                              child: Text(
+                                            child: Text(
                                                 room.name,
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
@@ -680,10 +680,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
                       ),
+                    );
+                  },
+                ),
               ),
                       ],
                     ),
@@ -753,30 +753,30 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       final room = _recentClasses[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
-                        child: InkWell(
-                          onTap: () {
-                            NavigationHelper.navigateToRoomDetail(
-                              context,
-                              {
+                              child: InkWell(
+                      onTap: () {
+                                  NavigationHelper.navigateToRoomDetail(
+                                    context,
+                                    {
                                 'roomId': room.id,
                                 'building': room.building,
                                 'floor': room.floor,
-                              },
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(12.0),
+                                    },
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Room image placeholder
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.secondary.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Room image placeholder
+                                          Container(
+                                            width: 80,
+                                            height: 80,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.secondary.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
                                   child: room.imageUrl != null && room.imageUrl!.isNotEmpty
                                       ? ClipRRect(
                                           borderRadius: BorderRadius.circular(8),
@@ -791,28 +791,28 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                           ),
                                         )
                                       : Icon(
-                                          Icons.meeting_room,
-                                          size: 36,
-                                          color: AppColors.secondary,
-                                        ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
+                                              Icons.meeting_room,
+                                              size: 36,
+                                              color: AppColors.secondary,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                      Text(
                                         room.name,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                                fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
+                                                Text(
                                         'Building ${room.building} - Floor ${room.floor}',
                                         style: const TextStyle(
-                                          fontSize: 14,
+                                                    fontSize: 14,
                                           color: Colors.grey,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -826,30 +826,30 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                             size: 16,
                                           ),
                                           const SizedBox(width: 4),
-                                          Text(
+                                                Text(
                                             '${room.rating.toStringAsFixed(1)}',
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                               color: AppColors.highlight,
+                                                  ),
+                                                ),
+                                              ],
+                                      ),
+                                    ],
                                             ),
                                           ),
-                                        ],
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                  size: 16,
+                                            color: AppColors.secondary,
                                       ),
                                     ],
                                   ),
                                 ),
-                                Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 16,
-                                  color: AppColors.secondary,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                    ),
+                  );
+                },
+              ),
                       ],
                     ),
                   ),
@@ -881,13 +881,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             }
                             if (!snapshot.hasData || snapshot.data!.isEmpty) {
                               return Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Text(
-                                    'FAQs are not available',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  'FAQs are not available',
+                                  style: TextStyle(color: Colors.grey),
                                 ),
+                              ),
                               );
                             }
 
@@ -904,14 +904,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    textColor: AppColors.secondary,
-                                    iconColor: AppColors.accent,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: Text(
+                textColor: AppColors.secondary,
+                iconColor: AppColors.accent,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
                                           faq.answer,
-                                          style: TextStyle(color: AppColors.black),
+                      style: TextStyle(color: AppColors.black),
                                         ),
                                       ),
                                     ],
@@ -920,7 +920,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               }).toList(),
                             );
                           },
-                        ),
+                            ),
                         if (_faqs.length > 5) // This check still uses the old _faqs list, should be updated if needed
                           Center(
                             child: Padding(
