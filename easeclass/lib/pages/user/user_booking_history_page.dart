@@ -4,6 +4,7 @@ import '../../services/booking_service.dart';
 import '../../models/booking_model.dart';
 import '../../theme/app_colors.dart';
 import '../admin/booking_detail_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class UserBookingHistoryPage extends StatefulWidget {
   const UserBookingHistoryPage({Key? key}) : super(key: key);
@@ -30,23 +31,18 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
     });
 
     try {
-      // Get only completed bookings for this tab
+      // Get completed and cancelled bookings for this tab
       final completedBookings = await _bookingService.getBookingsByStatus('completed').first;
+      final cancelledBookingsSnapshot = await FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid).where('status', isEqualTo: 'cancelled').get();
+
+      // Combine and map the results
+      final cancelledBookings = cancelledBookingsSnapshot.docs.map((doc) => BookingModel.fromFirestore(doc)).toList();
+      final allHistoryBookings = [...completedBookings, ...cancelledBookings];
 
       if (mounted) {
         setState(() {
-          _allBookings = completedBookings.map((booking) {
-            final map = booking.toMap();
-            // Ensure all keys needed in the UI are present
-            return {
-              ...map,
-              'roomName': map['roomName'] ?? 'Room ${map['roomId']}',
-              'building': map['building'] ?? '-',
-              'floor': map['floor'] ?? '-',
-              'purpose': map['purpose'] ?? 'Not specified',
-              'status': 'completed', // Ensure status is consistent
-            };
-          }).toList();
+          // Convert BookingModel objects to maps for the _allBookings list
+          _allBookings = allHistoryBookings.map((booking) => booking.toMap()).toList();
           
           // Sort by date, most recent first
           _allBookings.sort((a, b) => b['createdAt'].compareTo(a['createdAt']));
@@ -160,7 +156,7 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
                   child: _filteredBookings.isEmpty
                       ? const Center(
                           child: Text(
-                            'No completed bookings found',
+                            'No completed or cancelled bookings found',
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey,

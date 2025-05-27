@@ -29,7 +29,7 @@ class _UserBookingsPageState extends State<UserBookingsPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Booked Rooms'),
+        title: const Text('Booked Classrooms'),
         centerTitle: true,
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
@@ -41,7 +41,7 @@ class _UserBookingsPageState extends State<UserBookingsPage>
           indicatorColor: Colors.white,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold),
           tabs: const [
-            Tab(text: 'Booked Rooms'),
+            Tab(text: 'Booked Classrooms'),
             Tab(text: 'History'),
           ],
         ),

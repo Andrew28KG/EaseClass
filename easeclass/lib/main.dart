@@ -352,7 +352,7 @@ class _MainPageState extends State<MainPage> {
                     const BottomNavigationBarItem(
                       icon: Icon(Icons.meeting_room_outlined),
                       activeIcon: Icon(Icons.meeting_room_rounded),
-                      label: 'Available Rooms',
+                      label: 'Available Classrooms',
                     ),
                     if (isAdmin)
                       const BottomNavigationBarItem(

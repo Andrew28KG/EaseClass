@@ -53,7 +53,7 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
     });
     
     try {
-      // Get available rooms from Firestore
+      // Get available classrooms from Firestore
       final rooms = await _firestoreService.getAvailableRooms();
       
       if (mounted) {
@@ -161,7 +161,7 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Available Rooms'),
+        title: const Text('Available Classrooms'),
         actions: [
           // Using a stateful builder to isolate the filter button from any parent widget events
           StatefulBuilder(
@@ -354,7 +354,7 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: const Text(
-                      'Showing all available rooms. Use filters to narrow your search.',
+                      'Showing all available classrooms. Use filters to narrow your search.',
                       style: TextStyle(color: Colors.blue),
                     ),
                   ),
@@ -832,7 +832,7 @@ class _FilterSectionState extends State<FilterSection> {
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
                   child: Text(
-                    'Find available rooms based on your preferences',
+                    'Find available classrooms based on your preferences',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey,

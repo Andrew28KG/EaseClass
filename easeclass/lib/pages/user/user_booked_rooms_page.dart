@@ -360,51 +360,29 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
   }
 
   Widget _buildMainContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     return Column(
       children: [
+        // Display only Pending and Approved bookings
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadBookings,
-            child: _filteredBookings.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.meeting_room_outlined,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No bookings found',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Try changing your filters',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _allBookings.where((booking) => 
+                  booking['status'] == 'pending' || booking['status'] == 'approved').isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No pending or approved bookings.',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _allBookings.where((booking) => 
+                        booking['status'] == 'pending' || booking['status'] == 'approved').length,
+                      itemBuilder: (context, index) {
+                        final booking = _allBookings.where((booking) => 
+                          booking['status'] == 'pending' || booking['status'] == 'approved').toList()[index];
+                        return _buildBookingCard(booking);
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _filteredBookings.length,
-                    itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index]),
-                  ),
-          ),
         ),
       ],
     );

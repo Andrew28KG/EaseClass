@@ -59,15 +59,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         final currentFirebaseUser = FirebaseAuth.instance.currentUser;
         if (currentFirebaseUser != null) {
           _isAdmin = await _authService.isCurrentUserAdmin();
-        }
-
+      }
+      
         final availableRooms = await _firestoreService.getAvailableRooms();
         final availableClasses = await _firestoreService.getAvailableClasses();
         final currentBookings = await _firestoreService.getOngoingBookings();
         final faqs = await _firestoreService.getFAQs();
-
+        
         availableRooms.sort((a, b) => b.rating.compareTo(a.rating));
-
+        
         if (mounted) {
           setState(() {
             _currentUser = currentUser;
@@ -477,7 +477,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
               Text(
-                'Available Rooms',
+                'Available Classrooms',
                 style: TextStyle(
                                 fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1281,7 +1281,7 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
