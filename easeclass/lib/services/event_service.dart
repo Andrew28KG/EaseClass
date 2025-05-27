@@ -21,7 +21,7 @@ class EventModel {
     return EventModel(
       id: doc.id,
       title: data?['title'] ?? '',
-      description: data?['description'] ?? '',
+      description: data?['content'] ?? '',
       imageUrl: data?['imageUrl'] ?? '',
     );
   }
@@ -30,7 +30,7 @@ class EventModel {
   Map<String, dynamic> toMap() {
     return {
       'title': title,
-      'description': description,
+      'content': description,
       'imageUrl': imageUrl,
       'createdAt': FieldValue.serverTimestamp(), // Optional: add a timestamp
     };
@@ -70,7 +70,7 @@ class EventService {
     try {
       await _firestore.collection(_collection).add({
         'title': title,
-        'description': description,
+        'content': description,
         'imageUrl': imageUrl,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -84,7 +84,7 @@ class EventService {
     try {
       await _firestore.collection(_collection).doc(eventId).update({
         'title': title,
-        'description': description,
+        'content': description,
         'imageUrl': imageUrl,
         'updatedAt': FieldValue.serverTimestamp(), // Optional: add an update timestamp
       });

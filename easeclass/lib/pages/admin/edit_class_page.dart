@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../models/room_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/class_model.dart';
 import '../../services/firestore_service.dart';
 
 class EditClassPage extends StatefulWidget {
-  final RoomModel roomModel;
+  final ClassModel classModel;
 
   const EditClassPage({
     Key? key,
-    required this.roomModel,
+    required this.classModel,
   }) : super(key: key);
 
   @override
@@ -33,12 +34,12 @@ class _EditClassPageState extends State<EditClassPage> {
   }
 
   void _initializeData() {
-    _nameController.text = widget.roomModel.name;
-    _descriptionController.text = widget.roomModel.description;
-    _buildingController.text = widget.roomModel.building;
-    _floorController.text = widget.roomModel.floor.toString();
-    _capacityController.text = widget.roomModel.capacity.toString();
-    _features = List<String>.from(widget.roomModel.features);
+    _nameController.text = widget.classModel.name;
+    _descriptionController.text = widget.classModel.description;
+    _buildingController.text = widget.classModel.building;
+    _floorController.text = widget.classModel.floor.toString();
+    _capacityController.text = widget.classModel.capacity.toString();
+    _features = List<String>.from(widget.classModel.features);
   }
 
   @override
@@ -65,10 +66,11 @@ class _EditClassPageState extends State<EditClassPage> {
         'floor': int.parse(_floorController.text),
         'capacity': int.parse(_capacityController.text),
         'features': _features,
+        'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Update the room using FirestoreService
-      await _firestoreService.updateRoom(widget.roomModel.id, updatedData);
+      // Update the class using FirestoreService
+      await _firestoreService.updateClass(widget.classModel.id, updatedData);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

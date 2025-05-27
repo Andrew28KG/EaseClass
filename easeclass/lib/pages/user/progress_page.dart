@@ -33,8 +33,14 @@ class _ProgressPageState extends State<ProgressPage> with SingleTickerProviderSt
     });
     
     try {
+      // Get current user
+      final currentUser = await _firestoreService.getCurrentUser();
+      if (currentUser == null) {
+        throw Exception('User not found');
+      }
+
       // Get user bookings from Firestore
-      final bookings = await _firestoreService.getUserBookings();
+      final bookings = await _firestoreService.getUserBookings(currentUser.id);
       
       if (mounted) {
         setState(() {

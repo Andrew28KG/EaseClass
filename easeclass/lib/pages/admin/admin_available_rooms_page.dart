@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../services/firestore_service.dart';
-import '../../models/room_model.dart';
+import '../../models/class_model.dart';
 import '../../theme/app_colors.dart';
 
-class AdminAvailableRoomsPage extends StatefulWidget {
-  const AdminAvailableRoomsPage({Key? key}) : super(key: key);
+class AdminAvailableClassesPage extends StatefulWidget {
+  const AdminAvailableClassesPage({Key? key}) : super(key: key);
 
   @override
-  State<AdminAvailableRoomsPage> createState() => _AdminAvailableRoomsPageState();
+  State<AdminAvailableClassesPage> createState() => _AdminAvailableClassesPageState();
 }
 
-class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
+class _AdminAvailableClassesPageState extends State<AdminAvailableClassesPage> {
   String selectedBuilding = 'All';
   String selectedFloor = 'All';
   String selectedCapacity = 'All';
@@ -18,24 +18,24 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
   
   // Firebase services
   final FirestoreService _firestoreService = FirestoreService();
-  List<RoomModel> _rooms = [];
+  List<ClassModel> _classes = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadRooms();
+    _loadClasses();
   }
 
-  Future<void> _loadRooms() async {
+  Future<void> _loadClasses() async {
     setState(() {
       _isLoading = true;
     });
     
     try {
-      final rooms = await _firestoreService.getRooms();
+      final classes = await _firestoreService.getClasses();
       setState(() {
-        _rooms = rooms;
+        _classes = classes;
         _isLoading = false;
       });
     } catch (e) {
@@ -43,19 +43,19 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
         _isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading rooms: $e')),
+        SnackBar(content: Text('Error loading classes: $e')),
       );
     }
   }
 
-  List<RoomModel> _getFilteredRooms() {
-    return _rooms.where((room) {
-      bool matchesBuilding = selectedBuilding == 'All' || room.building == selectedBuilding;
-      bool matchesFloor = selectedFloor == 'All' || room.floor == selectedFloor;
+  List<ClassModel> _getFilteredClasses() {
+    return _classes.where((classItem) {
+      bool matchesBuilding = selectedBuilding == 'All' || classItem.building == selectedBuilding;
+      bool matchesFloor = selectedFloor == 'All' || classItem.floor.toString() == selectedFloor;
       bool matchesCapacity = selectedCapacity == 'All' || 
-        (selectedCapacity == '< 30' && room.capacity < 30) ||
-        (selectedCapacity == '30-60' && room.capacity >= 30 && room.capacity <= 60) ||
-        (selectedCapacity == '> 60' && room.capacity > 60);
+        (selectedCapacity == '< 30' && classItem.capacity < 30) ||
+        (selectedCapacity == '30-60' && classItem.capacity >= 30 && classItem.capacity <= 60) ||
+        (selectedCapacity == '> 60' && classItem.capacity > 60);
       
       return matchesBuilding && matchesFloor && matchesCapacity;
     }).toList();
@@ -63,25 +63,36 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
 
   // Get unique buildings for filter
   List<String> _getBuildings() {
-    Set<String> buildings = _rooms.map((room) => room.building).toSet();
+    Set<String> buildings = _classes.map((classItem) => classItem.building).toSet();
     return ['All', ...buildings];
   }
+
   // Get unique floors for filter
   List<String> _getFloors() {
-    Set<String> floors = _rooms.map((room) => room.floor.toString()).toSet();
+    Set<String> floors = _classes.map((classItem) => classItem.floor.toString()).toSet();
     return ['All', ...floors];
+  }
+
+  Future<void> _updateClassAvailability(String classId, bool isAvailable) async {
+    try {
+      await _firestoreService.updateClassAvailability(classId, isAvailable);
+      await _loadClasses(); // Reload the list after update
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating class availability: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredRooms = _getFilteredRooms();
+    final filteredClasses = _getFilteredClasses();
     
     return WillPopScope(
       onWillPop: () async => false, // Prevent back button navigation
       child: Scaffold(
-        // No AppBar since this is embedded in AdminMainPage
         body: RefreshIndicator(
-          onRefresh: _loadRooms,
+          onRefresh: _loadClasses,
           child: Column(
             children: [
               // Filter panel
@@ -96,7 +107,7 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Filter Rooms',
+                          'Filter Classes',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const SizedBox(height: 8),
@@ -205,7 +216,7 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Available Rooms: ${filteredRooms.length}',
+                      'Available Classes: ${filteredClasses.length}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     TextButton.icon(
@@ -227,16 +238,16 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
                 ),
               ),
               
-              // Room list
+              // Class list
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : filteredRooms.isEmpty
-                        ? const Center(child: Text('No rooms available matching the filters'))
+                    : filteredClasses.isEmpty
+                        ? const Center(child: Text('No classes available matching the filters'))
                         : ListView.builder(
-                            itemCount: filteredRooms.length,
+                            itemCount: filteredClasses.length,
                             itemBuilder: (context, index) {
-                              final room = filteredRooms[index];
+                              final classItem = filteredClasses[index];
                               return Card(
                                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 child: Padding(
@@ -246,112 +257,29 @@ class _AdminAvailableRoomsPageState extends State<AdminAvailableRoomsPage> {
                                     children: [
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [                                          Text(
-                                            "Room ${room.id}",
+                                        children: [
+                                          Text(
+                                            classItem.name,
                                             style: const TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: room.isAvailable
-                                                  ? Colors.green
-                                                  : Colors.red,
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: Text(
-                                              room.isAvailable ? 'Available' : 'Unavailable',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 12,
-                                              ),
-                                            ),
+                                          Switch(
+                                            value: classItem.isAvailable,
+                                            onChanged: (value) {
+                                              _updateClassAvailability(classItem.id, value);
+                                            },
                                           ),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          Icon(Icons.location_on, size: 16, color: AppColors.secondary),
-                                          const SizedBox(width: 4),
-                                          Text('Building: ${room.building}, Floor: ${room.floor}'),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(Icons.people, size: 16, color: AppColors.secondary),
-                                          const SizedBox(width: 4),
-                                          Text('Capacity: ${room.capacity} people'),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(Icons.star, size: 16, color: Colors.amber),
-                                          const SizedBox(width: 4),
-                                          Text('Rating: ${room.rating.toStringAsFixed(1)}'),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: room.features.map((facility) {
-                                          return Chip(
-                                            label: Text(
-                                              facility,
-                                              style: const TextStyle(fontSize: 12),
-                                            ),
-                                            backgroundColor: AppColors.lightGrey,
-                                            padding: EdgeInsets.zero,
-                                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          );
-                                        }).toList(),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          TextButton.icon(
-                                            onPressed: () {
-                                              // Toggle room availability
-                                              _firestoreService.updateRoomAvailability(
-                                                room.id, 
-                                                !room.isAvailable
-                                              ).then((_) => _loadRooms());
-                                            },
-                                            icon: Icon(
-                                              room.isAvailable 
-                                                  ? Icons.block 
-                                                  : Icons.check_circle,
-                                            ),
-                                            label: Text(
-                                              room.isAvailable 
-                                                  ? 'Mark Unavailable' 
-                                                  : 'Mark Available',
-                                            ),
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: room.isAvailable 
-                                                  ? Colors.red 
-                                                  : Colors.green,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          TextButton.icon(
-                                            onPressed: () {
-                                              // View room details or edit
-                                              // This would open a detailed view of the room
-                                            },
-                                            icon: const Icon(Icons.edit),
-                                            label: const Text('Edit'),
-                                          ),
-                                        ],
-                                      ),
+                                      Text('Building: ${classItem.building}'),
+                                      Text('Floor: ${classItem.floor}'),
+                                      Text('Capacity: ${classItem.capacity}'),
+                                      if (classItem.features.isNotEmpty)
+                                        Text('Features: ${classItem.features.join(", ")}'),
+                                      Text('Rating: ${classItem.rating.toStringAsFixed(1)} (${classItem.totalRatings} reviews)'),
                                     ],
                                   ),
                                 ),

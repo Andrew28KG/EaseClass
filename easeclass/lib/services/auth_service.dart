@@ -132,4 +132,8 @@ class AuthService {
       rethrow;
     }
   }
+
+  User? getCurrentUser() {
+    return _auth.currentUser;
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../pages/admin/admin_main_page.dart';
+import '../models/class_model.dart';
 
 /// Helper class to handle navigation in the app with the nested navigation structure
 class NavigationHelper {
@@ -92,6 +93,16 @@ class NavigationHelper {
     navigateToTab(context, isAdmin ? 4 : 3);
   }
   
+  /// Navigate to profile page
+  static void navigateToProfile(BuildContext context) async {
+    // Get the AuthService to check if user is admin
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final isAdmin = await authService.isCurrentUserAdmin();
+    
+    // For users, settings is tab 3, for admins it's tab 4
+    navigateToTab(context, isAdmin ? 4 : 3);
+  }
+  
   /// Navigate to management tab (admin only)
   static void navigateToManagement(BuildContext context) {
     // Only for admins, tab 2
@@ -126,5 +137,28 @@ class NavigationHelper {
       MaterialPageRoute(builder: (context) => const AdminMainPage()),
       (route) => false,
     );
+  }
+
+  /// Navigate to class details page
+  static void navigateToClassDetails(BuildContext context, ClassModel classModel) {
+    navigateTo(context, '/class-detail', arguments: classModel);
+  }
+
+  /// Navigate to available classes page
+  static void navigateToAvailableClasses(BuildContext context, {Map<String, dynamic>? applyFilter}) {
+    navigateToTab(context, 1); // Tab 1 is for available classes
+    if (applyFilter != null) {
+      pendingClassFilters = applyFilter;
+    }
+  }
+
+  // Static variable to hold pending class filters
+  static Map<String, dynamic>? pendingClassFilters;
+
+  /// Check if there are pending class filters to apply
+  static Map<String, dynamic>? consumePendingClassFilters() {
+    final filters = pendingClassFilters;
+    pendingClassFilters = null;
+    return filters;
   }
 }

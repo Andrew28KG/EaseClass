@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/firestore_service.dart';
-import '../../models/room_model.dart';
-import '../../pages/admin/edit_class_page.dart';
+import '../../models/class_model.dart';
+import 'edit_class_page.dart';
 // Note: ClassEditPage was removed, edit functionality disabled for now
 
 class ClassManagementPage extends StatefulWidget {
@@ -45,23 +46,23 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
   final List<String> availabilityOptions = ['All', 'Available', 'Unavailable'];
   final List<String> ratingSortOptions = ['None', 'Highest to Lowest', 'Lowest to Highest'];
 
-  List<RoomModel> _applyFiltersToClasses(List<RoomModel> classes) {
+  List<ClassModel> _applyFiltersToClasses(List<ClassModel> classes) {
      final query = _searchController.text.toLowerCase();
-     List<RoomModel> filtered = classes;
+     List<ClassModel> filtered = classes;
 
       // Apply search filter
       if (query.isNotEmpty) {
-        filtered = filtered.where((room) {
-          return room.name.toLowerCase().contains(query) ||
-                 room.description.toLowerCase().contains(query) ||
-                 room.building.toLowerCase().contains(query) ||
-                 room.features.any((feature) => feature.toLowerCase().contains(query));
+        filtered = filtered.where((classItem) {
+          return classItem.name.toLowerCase().contains(query) ||
+                 classItem.description.toLowerCase().contains(query) ||
+                 classItem.building.toLowerCase().contains(query) ||
+                 classItem.features.any((feature) => feature.toLowerCase().contains(query));
         }).toList();
       }
       
       // Apply building filter
       if (selectedBuilding != 'All') {
-        filtered = filtered.where((room) => room.building == selectedBuilding).toList();
+        filtered = filtered.where((classItem) => classItem.building == selectedBuilding).toList();
       }
       
       // Apply floor filter
@@ -69,7 +70,7 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
         // Safely parse integer, handle potential errors
         try {
           int floorNumber = int.parse(selectedFloor);
-           filtered = filtered.where((room) => room.floor == floorNumber).toList();
+           filtered = filtered.where((classItem) => classItem.floor == floorNumber).toList();
         } catch (e) {
           print('Error parsing floor: $e');
           // Optionally show a user-friendly error message
@@ -79,20 +80,20 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
       // Apply capacity filter
       if (selectedCapacity != 'All') {
         if (selectedCapacity.startsWith('<')) {
-          filtered = filtered.where((room) => room.capacity < 20).toList();
+          filtered = filtered.where((classItem) => classItem.capacity < 20).toList();
         } else if (selectedCapacity.startsWith('>')) {
-          filtered = filtered.where((room) => room.capacity > 40).toList();
+          filtered = filtered.where((classItem) => classItem.capacity > 40).toList();
         } else {
-          filtered = filtered.where((room) => room.capacity >= 20 && room.capacity <= 40).toList();
+          filtered = filtered.where((classItem) => classItem.capacity >= 20 && classItem.capacity <= 40).toList();
         }
       }
       
       // Apply availability filter
       if (selectedAvailability != 'All') {
         if (selectedAvailability == 'Available') {
-          filtered = filtered.where((room) => room.isAvailable).toList();
+          filtered = filtered.where((classItem) => classItem.isAvailable).toList();
         } else {
-          filtered = filtered.where((room) => !room.isAvailable).toList();
+          filtered = filtered.where((classItem) => !classItem.isAvailable).toList();
         }
       }
       
@@ -150,8 +151,8 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
                 TextFormField( // Use TextFormField for validation
                   controller: nameController,
                   decoration: InputDecoration(
-                    labelText: 'Room Name',
-                    hintText: 'Enter room name',
+                    labelText: 'Class Name',
+                    hintText: 'Enter class name',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -167,8 +168,8 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
                 TextFormField( // Use TextFormField
                   controller: descriptionController,
                   decoration: InputDecoration(
-                    labelText: 'Room Description',
-                    hintText: 'Enter room description',
+                    labelText: 'Class Description',
+                    hintText: 'Enter class description',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -275,8 +276,8 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
               if (_formKey.currentState!.validate()) { // Validate form
                  Navigator.pop(context); // Close dialog
                 
-                // Create a new RoomModel from the form data
-                final newRoom = RoomModel(
+                // Create a new ClassModel from the form data
+                final newClass = ClassModel(
                   id: DateTime.now().millisecondsSinceEpoch.toString(), // Simple unique ID
                   name: nameController.text,
                   description: descriptionController.text,
@@ -286,18 +287,19 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
                   isAvailable: isAvailable,
                   features: features, // Use the features list
                   rating: 0.0, // Initial rating
-                  images: [], // Add empty images list
                   totalRatings: 0, // Add initial totalRatings
+                  createdAt: Timestamp.now(),
+                  updatedAt: Timestamp.now(),
                 );
 
                 try {
-                  await _firestoreService.addRoom(newRoom); // Use FirestoreService
+                  await _firestoreService.addClass(newClass); // Use FirestoreService
                    ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Room added successfully')),
+                    const SnackBar(content: Text('Class added successfully')),
                   );
                 } catch (e) {
                    ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error adding room: $e')),
+                    SnackBar(content: Text('Error adding class: $e')),
                   );
                 }
               }
@@ -309,28 +311,28 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
     );
   }
 
-   void _deleteRoom(String roomId) async {
+   void _deleteClass(String classId) async {
      try {
-        await _firestoreService.deleteRoom(roomId); // Use FirestoreService
+        await _firestoreService.deleteClass(classId); // Use FirestoreService
          ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Room deleted successfully')),
+          const SnackBar(content: Text('Class deleted successfully')),
         );
       } catch (e) {
          ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting room: $e')),
+          SnackBar(content: Text('Error deleting class: $e')),
         );
       }
    }
 
-  void _editClass(RoomModel roomModel) async {
+  void _editClass(ClassModel classModel) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EditClassPage(roomModel: roomModel),
+        builder: (context) => EditClassPage(classModel: classModel),
       ),
     );
 
-    // If result is true, it means the room was updated and we should refresh
+    // If result is true, it means the class was updated and we should refresh
     if (result == true) {
       // StreamBuilder will automatically update, no need to manually reload
     }
@@ -339,14 +341,23 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Class Management'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showAddClassDialog,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(8.0),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                labelText: 'Search Classes',
+                hintText: 'Search classes...',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -481,11 +492,11 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
           ),
           Expanded(
             // Wrap the list display with StreamBuilder
-            child: StreamBuilder<List<RoomModel>>(
-              stream: _firestoreService.getRoomsStream(), // Listen to the stream
+            child: StreamBuilder<List<ClassModel>>(
+              stream: _firestoreService.getClassesStream(), // Listen to the stream
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error loading rooms: ${snapshot.error}'));
+                  return Center(child: Text('Error loading classes: ${snapshot.error}'));
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -493,53 +504,41 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
                 }
 
                 // Data is available, apply filters
-                final rooms = snapshot.data ?? [];
-                final filteredRooms = _applyFiltersToClasses(rooms);
+                final classes = snapshot.data ?? [];
+                final filteredClasses = _applyFiltersToClasses(classes);
 
-                if (filteredRooms.isEmpty) {
-                  return const Center(child: Text('No rooms found.'));
+                if (filteredClasses.isEmpty) {
+                  return const Center(child: Text('No classes found.'));
                 }
 
                 return ListView.builder(
-                  itemCount: filteredRooms.length,
+                  itemCount: filteredClasses.length,
                   itemBuilder: (context, index) {
-                    final room = filteredRooms[index];
+                    final classItem = filteredClasses[index];
                     return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       child: ListTile(
-                        leading: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: room.isAvailable ? Colors.green[100] : Colors.red[100],
-                          ),
-                          child: Icon(
-                            Icons.meeting_room,
-                            color: room.isAvailable ? Colors.green[700] : Colors.red[700],
-                          ),
-                        ),
-                        title: Text(room.name),
-                        subtitle: Text(
-                            'Building ${room.building}, Floor ${room.floor}, Capacity: ${room.capacity}'),
+                        title: Text(classItem.name),
+                        subtitle: Text('${classItem.building} - Floor ${classItem.floor}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            Text('${classItem.rating.toStringAsFixed(1)} ⭐'),
                             IconButton(
                               icon: const Icon(Icons.edit),
-                              onPressed: () => _editClass(room),
+                              onPressed: () => _editClass(classItem),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete),
-                              onPressed: () => _deleteRoom(room.id), // Pass room ID to delete
-                              tooltip: 'Delete Room',
+                              onPressed: () => _deleteClass(classItem.id), // Pass class ID to delete
+                              tooltip: 'Delete Class',
                             ),
                           ],
                         ),
                         onTap: () {
-                          // Navigate to room detail page or show edit dialog
-                          // This is where admin could potentially view/edit room details
-                          // Navigator.push(context, MaterialPageRoute(builder: (context) => RoomDetailPage(room: room))); // Example navigation
+                          // Navigate to class detail page or show edit dialog
+                          // This is where admin could potentially view/edit class details
+                          // Navigator.push(context, MaterialPageRoute(builder: (context) => ClassDetailPage(class: classItem))); // Example navigation
                         },
                       ),
                     );
@@ -549,11 +548,6 @@ class _ClassManagementPageState extends State<ClassManagementPage> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddClassDialog,
-        tooltip: 'Add New Class',
-        child: const Icon(Icons.add),
       ),
     );
   }

@@ -22,20 +22,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+  final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
   final PageController _bannerController = PageController();
   late AnimationController _animationController;
-  Animation<double> _fadeAnimation = AlwaysStoppedAnimation(1.0);
+  late Animation<double> _fadeAnimation;
   
-  // Firebase services
-  final FirestoreService _firestoreService = FirestoreService();
-  final AuthService _authService = AuthService();
-  UserModel? _currentUser;
-  List<RoomModel> _availableRooms = [];
-  List<RoomModel> _recentClasses = []; // Renamed from _availableClasses to use it for Recent Classes
-  List<BookingModel> _recentBookings = [];
-  List<FAQModel> _faqs = [];
   bool _isLoading = true;
-  bool _isAdmin = false; // Admin flag for conditional rendering
+  bool _isAdmin = false;
+  UserModel? _currentUser;
+  List<ClassModel> _availableClasses = [];
+  List<ClassModel> _recentClasses = [];
+  List<FAQModel> _faqs = [];
+  List<BookingModel> _recentBookings = [];
   
   // Use a Stream to get events from Firestore
   final EventService _eventService = EventService();
@@ -44,42 +43,48 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _initializeAnimations();
-    _loadUserData(); // Initial load of user data
+    _loadData(); // Initial load of user data
   }
 
   // Load user data from Firebase (excluding event stream)
-  Future<void> _loadUserData() async {
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
     
     try {
+      final currentFirebaseUser = _authService.getCurrentUser();
+      if (currentFirebaseUser != null) {
       final currentUser = await _firestoreService.getCurrentUser();
       if (currentUser != null) {
-        final currentFirebaseUser = FirebaseAuth.instance.currentUser;
-        if (currentFirebaseUser != null) {
           _isAdmin = await _authService.isCurrentUserAdmin();
         }
       
-        // Get all rooms and sort them by rating
-        final allRooms = await _firestoreService.getRooms();
-        allRooms.sort((a, b) => b.rating.compareTo(a.rating));
+        // Get all classes and sort them by rating
+        final allClasses = await _firestoreService.getClasses();
+        allClasses.sort((a, b) => b.rating.compareTo(a.rating));
         
-        // Get available rooms (isAvailable = true)
-        final availableRooms = allRooms.where((room) => room.isAvailable).toList();
+        // Get available classes (isAvailable = true)
+        final availableClasses = allClasses.where((classItem) => classItem.isAvailable).toList();
         
-        // Get highest rated rooms (top 3)
-        final highestRatedRooms = allRooms.take(3).toList();
+        // Get highest rated classes (top 3)
+        final highestRatedClasses = allClasses.take(3).toList();
+        
+        // Get current user's bookings
+        final userBookings = await _firestoreService.getUserBookings(currentFirebaseUser.uid);
+        final currentBookings = userBookings.where((booking) => 
+          booking.status == 'approved' || booking.status == 'pending'
+        ).toList();
         
         // Get FAQs
         final faqs = await _firestoreService.getFAQs();
-        debugPrint('Fetched ${faqs.length} FAQs.');
         
         if (mounted) {
           setState(() {
             _currentUser = currentUser;
-            _availableRooms = availableRooms;
-            _recentClasses = highestRatedRooms; // Use highest rated rooms instead of classes
+            _availableClasses = availableClasses;
+            _recentClasses = highestRatedClasses;
+            _recentBookings = currentBookings;
             _faqs = faqs;
             _isLoading = false;
           });
@@ -157,7 +162,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 ),
               ],
             ),
-            // Notification icon removed as requested
             actions: [],
             flexibleSpace: Container(
               decoration: BoxDecoration(
@@ -191,7 +195,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       child: Row(
                         children: [
                           CircleAvatar(
-                            radius: 22, // Smaller avatar
+                            radius: 22,
                             backgroundColor: AppColors.secondary.withOpacity(0.1),
                             child: _currentUser?.photoUrl != null
                                 ? ClipRRect(
@@ -201,82 +205,42 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                       width: 44,
                                       height: 44,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                          Icon(
-                                            Icons.person_rounded,
-                                            color: AppColors.secondary,
-                                            size: 22,
-                                          ),
                                     ),
                                   )
                                 : Icon(
-                                    Icons.person_rounded,
+                                    Icons.person,
+                                    size: 24,
                                     color: AppColors.secondary,
-                                    size: 22, // Smaller icon
                                   ),
                           ),
                           const SizedBox(width: 12),
-                          Column(
+                          Expanded(
+                            child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-              const Text(
-                                'Welcome back,',
-                                style: TextStyle(
-                                  fontSize: 12, // Smaller text
-                                  color: AppColors.darkGrey,
-                                ),
-                              ),
               Text(
-                                _currentUser?.displayName ?? _currentUser?.email ?? 'User',
-                                style: TextStyle(
-                                  fontSize: 16, // Smaller text
+                                  'Welcome, ${_currentUser?.displayName ?? 'User'}',
+                                  style: const TextStyle(
+                                    fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.black,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          Spacer(),
-                          // Add admin panel button if user is admin
-                          if (_isAdmin)
-                            Container(
-                              padding: EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: AppColors.secondary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: GestureDetector(
-                                onTap: () {
-                                  // Navigate to admin dashboard
-                                  NavigationHelper.navigateToAdminDashboard(context);
-                                },
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.admin_panel_settings,
-                                      color: AppColors.secondary,
-                                      size: 18,
-                                    ),
-                                    SizedBox(width: 4),
                                     Text(
-                                      'Admin',
+                                  _currentUser?.email ?? '',
                                       style: TextStyle(
-                                        color: AppColors.secondary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                          // Notification icon removed as requested
                         ],
                       ),
                     ),
                   ),
 
-                  // Auto-sliding Top Event Banner
+                  // Event Banner Section
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
@@ -305,11 +269,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               return Center(child: Text('Error loading events: ${snapshot.error}'));
                             }
                             if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                              // Stop the timer if there are no events
                               return Center(
                                 child: Padding(
                                   padding: const EdgeInsets.all(16.0),
-                                  child: Text('No events available yet.', style: TextStyle(color: Colors.grey[600])), // Added subtle styling
+                                  child: Text('No events available yet.', style: TextStyle(color: Colors.grey[600])),
                                 ),
                               );
                             }
@@ -347,7 +310,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
-                                NavigationHelper.navigateToProgress(context);
+                                NavigationHelper.navigateToBookings(context);
                               },
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -375,7 +338,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               child: Padding(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Text(
-                                  'No upcoming bookings',
+                                  'No current bookings',
                                   style: TextStyle(color: Colors.grey),
                                 ),
                               ),
@@ -394,7 +357,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 if (booking.status == 'pending') {
                                   statusColor = Colors.orange;
                                   statusIcon = Icons.pending_actions;
-                                } else if (booking.status == 'upcoming') {
+                                } else if (booking.status == 'approved') {
                                   statusColor = Colors.blue;
                                   statusIcon = Icons.event_available;
                                 } else {
@@ -425,7 +388,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}',
+                                                booking.roomDetails != null 
+                                                    ? (booking.roomDetails!['name'] as String? ?? 'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}')
+                                                    : 'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}',
                                                 style: const TextStyle(
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 16,
@@ -472,13 +437,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   ),
                   const SizedBox(height: 16),
 
-              // Available Rooms Section
+                  // Available Classes Section
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Section header with see all link
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -490,10 +454,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   color: AppColors.primary,
                 ),
                             ),
-                            // See All button
                             GestureDetector(
                               onTap: () {
-                                NavigationHelper.navigateToAvailableRooms(context);
+                                NavigationHelper.navigateToAvailableClasses(context);
                               },
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -517,174 +480,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           ],
               ),
               const SizedBox(height: 10),
-              Container(
-                height: 180,
-                child: _availableRooms.isEmpty
-                    ? Center(child: Text('No available classrooms found'))
-                    : ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                        itemCount: min(5, _availableRooms.length),
-                  itemBuilder: (context, index) {
-                          final room = _availableRooms[index];
-                          return InkWell(
-                            onTap: () {
-                              NavigationHelper.navigateToRoomDetail(
-                                context,
-                                {
-                                  'roomId': room.id,
-                                  'building': room.building,
-                                  'floor': room.floor,
-                                },
-                              );
-                            },
-                            child: Container(
-                      width: 200,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
-                        border: Border.all(
-                          color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                          width: 1,
-                        ),
-                      ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Room image section
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(11),
-                                      topRight: Radius.circular(11),
-                                    ),
-                                    child: Container(
-                                      height: 80,
-                                      width: double.infinity,
-                                      child: room.imageUrl != null && room.imageUrl!.isNotEmpty
-                                          ? Image.network(
-                                              room.imageUrl!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) => Container(
-                                                color: index % 2 == 0 ? AppColors.primary.withOpacity(0.2) : AppColors.secondary.withOpacity(0.2),
-                                                child: Icon(
-                                                  Icons.meeting_room,
-                                                  size: 40,
-                                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                ),
-                                              ),
-                                            )
-                                          : Container(
-                                              color: index % 2 == 0 ? AppColors.primary.withOpacity(0.2) : AppColors.secondary.withOpacity(0.2),
-                                              child: Icon(
-                                                Icons.meeting_room,
-                                                size: 40,
-                                                color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                  // Room details section
-                                  Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                ),
-                                              ),
-                                            child: Text(
-                                                room.name,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                ),
-                                              ),
-                                            ),
-                                            Icon(
-                                              Icons.star,
-                                              color: AppColors.highlight,
-                                              size: 16,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Building ${room.building}',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Floor ${room.floor}',
-                                          style: const TextStyle(fontSize: 13),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        // Rating row
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'Rating: ',
-                                              style: const TextStyle(fontSize: 10),
-                                            ),
-                                            ...List.generate(
-                                              5,
-                                              (starIndex) => Icon(
-                                                starIndex < room.rating.floor() 
-                                                    ? Icons.star 
-                                                    : (starIndex < room.rating ? Icons.star_half : Icons.star_border),
-                                                color: AppColors.highlight,
-                                                size: 12,
-                                              ),
-                                            ),
-                                            SizedBox(width: 2),
-                                            Text(
-                                              '${room.rating.toStringAsFixed(1)}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              'View Details',
-                                              style: TextStyle(
-                                                color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                            Icon(
-                                              Icons.arrow_forward_ios,
-                                              size: 10,
-                                              color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+                        _buildAvailableClassesSection(),
                       ],
                     ),
                   ),
@@ -709,9 +505,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
-                                NavigationHelper.navigateToAvailableRooms(
+                                NavigationHelper.navigateToAvailableClasses(
                                   context,
-                                  applyFilter: {'ratingSort': 'Highest to Lowest'}
+                                  applyFilter: {'sortBy': 'rating', 'order': 'desc'},
                                 );
                               },
                               child: Row(
@@ -860,16 +656,16 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-              Text(
-                'Frequently Asked Questions',
-                style: TextStyle(
+                        const SizedBox(height: 40), // Increased space from navbar
+                        Text(
+                          'Frequently Asked Questions',
+                          style: TextStyle(
                             fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 10),
-                        // Use StreamBuilder to listen for real-time FAQ updates
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
                         StreamBuilder<List<FAQModel>>(
                           stream: _firestoreService.getFAQsStream(),
                           builder: (context, snapshot) {
@@ -881,70 +677,195 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             }
                             if (!snapshot.hasData || snapshot.data!.isEmpty) {
                               return Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'FAQs are not available',
-                                  style: TextStyle(color: Colors.grey),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'No FAQs available yet.',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
                                 ),
-                              ),
                               );
                             }
 
-                            final faqs = snapshot.data!;
-
+                            final List<FAQModel> faqs = snapshot.data!.take(5).toList(); // Limit to 5 FAQs
                             return Column(
-                              children: faqs.take(5).map((faq) {
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  child: ExpansionTile(
-                                    title: Text(
-                                      faq.question,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                textColor: AppColors.secondary,
-                iconColor: AppColors.accent,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                                          faq.answer,
-                      style: TextStyle(color: AppColors.black),
+                              children: [
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: faqs.length,
+                                  itemBuilder: (context, index) {
+                                    final faq = faqs[index];
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      child: ExpansionTile(
+                                        title: Text(
+                                          faq.question,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
                                         ),
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: Text(
+                                              faq.answer,
+                                              style: TextStyle(
+                                                color: Colors.grey[800],
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                TextButton(
+                                  onPressed: () {
+                                    NavigationHelper.navigateToProfile(context);
+                                  },
+                                  child: const Text('View more FAQs in Profile'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
                                   ),
-                                );
-                              }).toList(),
+                                ),
+                              ],
                             );
                           },
-                            ),
-                        if (_faqs.length > 5) // This check still uses the old _faqs list, should be updated if needed
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
-                              child: TextButton.icon(
-                                onPressed: () {
-                                  // Navigate to full FAQ page
-                                  NavigationHelper.navigateToSettings(context);
-                                },
-                                icon: Icon(Icons.help_outline),
-                                label: Text('See More FAQs'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                               ),
                             ),
                           ),
                       ],
+      ),
+    );
+  }
+
+  Widget _buildAvailableClassesSection() {
+    return Container(
+      height: 200, // Adjusted height
+      child: _availableClasses.isEmpty
+          ? Center(child: Text('No available classes found'))
+          : ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: min(5, _availableClasses.length),
+              itemBuilder: (context, index) {
+                final classItem = _availableClasses[index];
+                return InkWell(
+                  onTap: () {
+                    // Navigate to class details page
+                    _navigateToClassDetails(context, classItem);
+                  },
+                  child: Container(
+                    width: 280,
+                    margin: const EdgeInsets.only(right: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [AppColors.subtleShadow],
                     ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withOpacity(0.1),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.class_,
+                              size: 40,
+                              color: AppColors.secondary,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Consistent vertical padding
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      classItem.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${classItem.building} - Floor ${classItem.floor}',
+                                      style: TextStyle(
+                                        color: AppColors.darkGrey,
+                                        fontSize: 14,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8), // Added fixed space
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.star,
+                                      size: 16,
+                                      color: Colors.amber,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      classItem.rating.toStringAsFixed(1),
+                                      style: TextStyle(
+                                        color: AppColors.darkGrey,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
                   ),
                 ],
               ),
             ),
           ),
         ],
+                    ),
+                  ),
+                );
+              },
       ),
     );
+  }
+
+  // Update the navigation method in the "See All" button
+  void _navigateToAvailableClasses(BuildContext context) {
+    NavigationHelper.navigateToAvailableClasses(context);
+  }
+
+  // Update the navigation method in the "See All" button for highest rated classes
+  void _navigateToHighestRatedClasses(BuildContext context) {
+    NavigationHelper.navigateToAvailableClasses(
+      context,
+      applyFilter: {'ratingSort': 'Highest to Lowest'},
+    );
+  }
+
+  // Update the navigation method for class details
+  void _navigateToClassDetails(BuildContext context, ClassModel classModel) {
+    NavigationHelper.navigateToClassDetails(context, classModel);
   }
 }
 
@@ -1070,119 +991,184 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
 
   // Helper method to build an event card for the banner
   Widget _buildEventCard(BuildContext context, EventModel event) {
-    return GestureDetector(
+    return InkWell(
       onTap: () {
         // Show popup dialog with event details
         showDialog(
           context: context,
+          barrierDismissible: true,
+          useRootNavigator: false, // This ensures the dialog stays within the current tab
           builder: (BuildContext context) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+            return WillPopScope( // This prevents the dialog from triggering navigation
+              onWillPop: () async => true,
+              child: Dialog(
+                insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: AppColors.primary,
-                          child: Icon(
-                            Icons.event,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            event.title,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 24),
-                    Text(
-                      'Description',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.secondary,
+                elevation: 0,
+                backgroundColor: Colors.transparent,
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      event.description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    if (event.imageUrl.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          event.imageUrl,
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600]),
-                          ),
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                    : null,
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header with image
+                      if (event.imageUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                          child: Stack(
+                            children: [
+                              Image.network(
+                                event.imageUrl,
+                                height: 200,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  height: 200,
+                                  color: Colors.grey[300],
+                                  child: Center(
+                                    child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600]),
+                                  ),
+                                ),
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    height: 200,
+                                    color: Colors.grey[300],
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
+                              // Gradient overlay
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(0.7),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Close button
+                              Positioned(
+                                top: 16,
+                                right: 16,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white),
+                                    onPressed: () => Navigator.of(context, rootNavigator: false).pop(),
+                                  ),
+                                ),
+                              ),
+                              // Title overlay
+                              Positioned(
+                                bottom: 16,
+                                left: 16,
+                                right: 16,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      event.title,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        shadows: [
+                                          Shadow(
+                                            offset: Offset(1, 1),
+                                            blurRadius: 3,
+                                            color: Colors.black45,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Content
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Description Section
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.description, color: AppColors.primary, size: 20),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Description',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      event.description,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        color: Colors.grey[800],
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Close',
-                            style: TextStyle(color: AppColors.secondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1193,7 +1179,13 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [AppColors.cardShadow],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Stack(
           children: [
@@ -1233,38 +1225,54 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
+                    Colors.black.withOpacity(0.3),
                     Colors.black.withOpacity(0.7),
                   ],
-                  stops: const [0.5, 1.0],
+                  stops: const [0.4, 0.7, 1.0],
                 ),
               ),
             ),
 
             // Content (Title and Description)
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Spacer(), // This will push the content to the bottom
                   Text(
                     event.title,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(1, 1),
+                          blurRadius: 3,
+                          color: Colors.black45,
+                        ),
+                      ],
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
                     event.description,
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(1, 1),
+                          blurRadius: 3,
+                          color: Colors.black45,
+                        ),
+                      ],
                     ),
-                    maxLines: 3, // Increase max lines to show more description on the card
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

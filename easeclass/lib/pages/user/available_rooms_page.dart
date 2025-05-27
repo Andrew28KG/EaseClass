@@ -1,214 +1,180 @@
 import 'package:flutter/material.dart';
-import '../../utils/navigation_helper.dart'; // Import navigation helper
-import '../../services/firestore_service.dart'; // Import Firestore service
-import '../../models/room_model.dart'; // Import Room model
-import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import '../../theme/app_colors.dart';
+import '../../utils/navigation_helper.dart';
+import '../../services/firestore_service.dart';
+import '../../models/class_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AvailableRoomsPage extends StatefulWidget {
-  const AvailableRoomsPage({Key? key}) : super(key: key);
+  final Map<String, dynamic>? applyFilter;
+
+  const AvailableRoomsPage({
+    Key? key,
+    this.applyFilter,
+  }) : super(key: key);
 
   @override
   State<AvailableRoomsPage> createState() => _AvailableRoomsPageState();
 }
 
 class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
-  String selectedBuilding = 'All';
-  String selectedFloor = 'All';
-  String selectedCapacity = 'All';
-  String selectedRatingSort = 'None';
-  DateTime selectedDate = DateTime.now();
-  TimeOfDay selectedTime = TimeOfDay.now();
-  bool isFilterExpanded = false;
-  
-  // Firebase services
   final FirestoreService _firestoreService = FirestoreService();
+  bool _isFilterExpanded = false;
+  String _selectedBuilding = 'All';
+  String _selectedFloor = 'All';
+  String _selectedCapacity = 'All';
+  String _selectedRatingSort = 'None';
+  DateTime _selectedDate = DateTime.now();
+  TimeOfDay _selectedTime = TimeOfDay.now();
+  List<String> _buildings = ['All'];
+  List<String> _floors = ['All'];
+  List<String> _capacities = ['All'];
+  List<String> _ratingSortOptions = ['None', 'Highest to Lowest', 'Lowest to Highest'];
 
   @override
   void initState() {
     super.initState();
-    // Check for any pending filters from navigation
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final pendingFilters = NavigationHelper.consumePendingFilters();
-      if (pendingFilters != null && mounted) {
-        setState(() {
-          // Apply any filters that were passed via navigation
-          if (pendingFilters.containsKey('ratingSort')) {
-            selectedRatingSort = pendingFilters['ratingSort'];
-            // Expand filters if a sort was applied
-            isFilterExpanded = true;
-          }
-        });
-      }
+    _loadFilterOptions();
+    _applyInitialFilters();
+  }
+
+  void _applyInitialFilters() {
+    if (widget.applyFilter != null) {
+      setState(() {
+        if (widget.applyFilter!['ratingSort'] != null) {
+          _selectedRatingSort = widget.applyFilter!['ratingSort'];
+        }
+      });
+    }
+  }
+
+  Future<void> _loadFilterOptions() async {
+    final classes = await _firestoreService.getClasses();
+    
+    // Extract unique values for filters
+    final buildings = classes.map((c) => c.building).toSet().toList()..sort();
+    final floors = classes.map((c) => c.floor.toString()).toSet().toList()..sort();
+    final capacities = classes.map((c) => c.capacity.toString()).toSet().toList()..sort();
+
+    setState(() {
+      _buildings = ['All', ...buildings];
+      _floors = ['All', ...floors];
+      _capacities = ['All', ...capacities];
     });
   }
 
-  // Filter constants
-  final List<String> buildings = ['All', 'Building A', 'Building B', 'Building C'];
-  final List<String> floors = ['All', '1st Floor', '2nd Floor', '3rd Floor'];
-  final List<String> capacities = ['All', '< 20 people', '20-40 people', '> 40 people'];
-  final List<String> ratingSortOptions = ['None', 'Highest to Lowest', 'Lowest to Highest'];
-
-  // Safe version of toggle that prevents any navigation
-  void _toggleFilterVisibility() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {
-          isFilterExpanded = !isFilterExpanded;
-        });
+  List<ClassModel> getFilteredClasses(List<ClassModel> classes) {
+    return classes.where((classItem) {
+      // Filter by building
+      if (_selectedBuilding != 'All' && classItem.building != _selectedBuilding) {
+        return false;
       }
-    });
+
+      // Filter by floor
+      if (_selectedFloor != 'All' && classItem.floor.toString() != _selectedFloor) {
+        return false;
+      }
+
+      // Filter by capacity
+      if (_selectedCapacity != 'All' && classItem.capacity.toString() != _selectedCapacity) {
+        return false;
+      }
+
+      // Filter by availability
+      if (!classItem.isAvailable) {
+        return false;
+      }
+
+      return true;
+    }).toList()
+      ..sort((a, b) {
+        if (_selectedRatingSort == 'Highest to Lowest') {
+          return b.rating.compareTo(a.rating);
+        } else if (_selectedRatingSort == 'Lowest to Highest') {
+          return a.rating.compareTo(b.rating);
+        }
+        return 0;
+      });
   }
 
-  // Apply filters method
   void _applyFilters() {
-    if (mounted) {
-      setState(() {
-        // Here you would typically apply the filters to your data
-        isFilterExpanded = false; // Auto-collapse the filter section
-      });
-    }
+    setState(() {
+      _isFilterExpanded = false;
+    });
   }
 
-  // Reset filters method
   void _resetFilters() {
-    if (mounted) {
-      setState(() {
-        selectedBuilding = 'All';
-        selectedFloor = 'All';
-        selectedCapacity = 'All';
-        selectedRatingSort = 'None';
-        selectedDate = DateTime.now();
-        selectedTime = TimeOfDay.now();
-      });
-    }
-  }
-
-  // Get filtered and sorted rooms
-  List<RoomModel> getFilteredRooms(List<RoomModel> allRooms) {
-    List<RoomModel> filteredRooms = List.from(allRooms);
-    
-    // Apply building filter
-    if (selectedBuilding != 'All') {
-      String buildingLetter = selectedBuilding.split(' ').last;
-      filteredRooms = filteredRooms.where((room) => room.building == buildingLetter).toList();
-    }
-    
-    // Apply floor filter
-    if (selectedFloor != 'All') {
-      int floorNumber = int.parse(selectedFloor.split(' ').first[0]);
-      filteredRooms = filteredRooms.where((room) => room.floor == floorNumber).toList();
-    }
-    
-    // Apply capacity filter
-    if (selectedCapacity != 'All') {
-      if (selectedCapacity.startsWith('<')) {
-        filteredRooms = filteredRooms.where((room) => room.capacity < 20).toList();
-      } else if (selectedCapacity.startsWith('>')) {
-        filteredRooms = filteredRooms.where((room) => room.capacity > 40).toList();
-      } else {
-        filteredRooms = filteredRooms.where((room) => room.capacity >= 20 && room.capacity <= 40).toList();
-      }
-    }
-    
-    // Apply rating sort
-    if (selectedRatingSort != 'None') {
-      if (selectedRatingSort == 'Highest to Lowest') {
-        filteredRooms.sort((a, b) => b.rating.compareTo(a.rating));
-      } else {
-        filteredRooms.sort((a, b) => a.rating.compareTo(b.rating));
-      }
-    }
-    
-    return filteredRooms;
+    setState(() {
+      _selectedBuilding = 'All';
+      _selectedFloor = 'All';
+      _selectedCapacity = 'All';
+      _selectedRatingSort = 'None';
+      _selectedDate = DateTime.now();
+      _selectedTime = TimeOfDay.now();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Check if any filters are active
-    bool hasActiveFilters = selectedBuilding != 'All' || 
-                           selectedFloor != 'All' || 
-                           selectedCapacity != 'All' ||
-                           selectedRatingSort != 'None';
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Available Classrooms'),
-        actions: [
-          // Using a stateful builder to isolate the filter button from any parent widget events
-          StatefulBuilder(
-            builder: (BuildContext context, StateSetter setFilterState) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: IconButton(
-                  icon: Icon(isFilterExpanded ? Icons.filter_list_off : Icons.filter_list),
-                  onPressed: () {
-                    setFilterState(() {
-                      isFilterExpanded = !isFilterExpanded;
-                    });
-                    // Also update the main state
-                    setState(() {});
-                  },
-                  tooltip: isFilterExpanded ? 'Hide Filters' : 'Show Filters',
-                ),
-              );
-            }
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: AppColors.primaryGradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-        ],
+        ),
       ),
       body: Column(
         children: [
-          // Filters Section - Collapsible
+          // Filter section
           FilterSection(
-            isExpanded: isFilterExpanded,
-            selectedBuilding: selectedBuilding,
-            selectedFloor: selectedFloor,
-            selectedCapacity: selectedCapacity,
-            selectedRatingSort: selectedRatingSort,
-            selectedDate: selectedDate,
-            selectedTime: selectedTime,
-            buildings: buildings,
-            floors: floors,
-            capacities: capacities,
-            ratingSortOptions: ratingSortOptions,
+            isExpanded: _isFilterExpanded,
+            selectedBuilding: _selectedBuilding,
+            selectedFloor: _selectedFloor,
+            selectedCapacity: _selectedCapacity,
+            selectedRatingSort: _selectedRatingSort,
+            selectedDate: _selectedDate,
+            selectedTime: _selectedTime,
+            buildings: _buildings,
+            floors: _floors,
+            capacities: _capacities,
+            ratingSortOptions: _ratingSortOptions,
             onBuildingChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  selectedBuilding = value;
-                });
-              }
+              setState(() {
+                _selectedBuilding = value ?? 'All';
+              });
             },
             onFloorChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  selectedFloor = value;
-                });
-              }
+              setState(() {
+                _selectedFloor = value ?? 'All';
+              });
             },
             onCapacityChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  selectedCapacity = value;
-                });
-              }
+              setState(() {
+                _selectedCapacity = value ?? 'All';
+              });
             },
             onRatingSortChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  selectedRatingSort = value;
-                });
-              }
+              setState(() {
+                _selectedRatingSort = value ?? 'None';
+              });
             },
             onDateChanged: (value) {
               if (value != null) {
                 setState(() {
-                  selectedDate = value;
+                  _selectedDate = value;
                 });
               }
             },
             onTimeChanged: (value) {
               if (value != null) {
                 setState(() {
-                  selectedTime = value;
+                  _selectedTime = value;
                 });
               }
             },
@@ -217,24 +183,24 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
           ),
           // StreamBuilder to listen for real-time updates
           Expanded(
-            child: StreamBuilder<List<RoomModel>>(
-              stream: _firestoreService.getRoomsStream(),
+            child: StreamBuilder<List<ClassModel>>(
+              stream: _firestoreService.getClassesStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error loading rooms: ${snapshot.error}'));
+                  return Center(child: Text('Error loading classes: ${snapshot.error}'));
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(child: Text('No available classrooms found.'));
                 }
 
                 // Apply client-side filters to the data from the stream
-                final allRooms = snapshot.data!;
-                final filteredRooms = getFilteredRooms(allRooms);
+                final allClasses = snapshot.data!;
+                final filteredClasses = getFilteredClasses(allClasses);
 
-                if (filteredRooms.isEmpty) {
+                if (filteredClasses.isEmpty) {
                   return const Center(
                     child: Text(
                       'No classrooms match your filters',
@@ -246,11 +212,11 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                   );
                 }
 
-                // Display the filtered rooms in a ListView
+                // Display the filtered classes in a ListView
                 return ListView.builder(
-                  itemCount: filteredRooms.length,
+                  itemCount: filteredClasses.length,
                   itemBuilder: (context, index) {
-                    final room = filteredRooms[index];
+                    final classItem = filteredClasses[index];
                     return Card(
                       margin: const EdgeInsets.all(8),
                       child: ListTile(
@@ -262,9 +228,9 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                             color: Colors.grey[200],
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: room.imageUrl != null && room.imageUrl!.isNotEmpty
+                          child: classItem.imageUrl != null && classItem.imageUrl!.isNotEmpty
                               ? Image.network(
-                                  room.imageUrl!,
+                                  classItem.imageUrl!,
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) => Icon(
                                     Icons.meeting_room,
@@ -282,19 +248,17 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                           children: [
                             Expanded(
                               child: Text(
-                                // Use room.name instead of room.id for the title
-                                room.name, // Display the room name
+                                classItem.name,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            // Show rating with constrained size
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.star, color: Colors.amber, size: 16),
                                 SizedBox(width: 2),
                                 Text(
-                                  room.rating.toStringAsFixed(1),
+                                  classItem.rating.toStringAsFixed(1),
                                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
                               ],
@@ -304,15 +268,13 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Display building and floor using room properties
-                            Text('Building ${room.building} - Floor ${room.floor}'),
-                            // Display capacity using room property
-                            Text('Capacity: ${room.capacity} people'),
-                            if (room.features.isNotEmpty)
+                            Text('Building ${classItem.building} - Floor ${classItem.floor}'),
+                            Text('Capacity: ${classItem.capacity} people'),
+                            if (classItem.features.isNotEmpty)
                               Wrap(
                                 spacing: 4,
                                 runSpacing: 4,
-                                children: room.features.map((feature) =>
+                                children: classItem.features.map((feature) =>
                                     Chip(
                                       label: Text(
                                         feature,
@@ -329,14 +291,7 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                         isThreeLine: true,
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          NavigationHelper.navigateToRoomDetail(
-                            context,
-                            {
-                              'roomId': room.id,
-                              'building': room.building,
-                              'floor': room.floor,
-                            },
-                          );
+                          NavigationHelper.navigateToClassDetails(context, classItem);
                         },
                       ),
                     );
