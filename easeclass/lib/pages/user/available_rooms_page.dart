@@ -22,8 +22,6 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
   
   // Firebase services
   final FirestoreService _firestoreService = FirestoreService();
-  List<RoomModel> _rooms = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -41,37 +39,10 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
           }
         });
       }
-      
-      // Load room data
-      _loadRooms();
     });
-  }
-  
-  Future<void> _loadRooms() async {
-    setState(() {
-      _isLoading = true;
-    });
-    
-    try {
-      // Get available classrooms from Firestore
-      final rooms = await _firestoreService.getAvailableRooms();
-      
-      if (mounted) {
-        setState(() {
-          _rooms = rooms;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading rooms: $e');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
+  // Filter constants
   final List<String> buildings = ['All', 'Building A', 'Building B', 'Building C'];
   final List<String> floors = ['All', '1st Floor', '2nd Floor', '3rd Floor'];
   final List<String> capacities = ['All', '< 20 people', '20-40 people', '> 40 people'];
@@ -113,8 +84,8 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
   }
 
   // Get filtered and sorted rooms
-  List<RoomModel> getFilteredRooms() {
-    List<RoomModel> filteredRooms = List.from(_rooms);
+  List<RoomModel> getFilteredRooms(List<RoomModel> allRooms) {
+    List<RoomModel> filteredRooms = List.from(allRooms);
     
     // Apply building filter
     if (selectedBuilding != 'All') {
@@ -184,9 +155,7 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+      body: Column(
         children: [
           // Filters Section - Collapsible
           FilterSection(
@@ -246,150 +215,54 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
             onApplyFilters: _applyFilters,
             onResetFilters: _resetFilters,
           ),
-
-          // Active Filters Row (only shown when filters are applied and collapsed)
-          if (!isFilterExpanded && hasActiveFilters)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[300]!, width: 1),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Active Filters:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: _resetFilters,
-                          child: const Text('Clear All'),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (selectedBuilding != 'All')
-                        Chip(
-                          avatar: const Icon(Icons.business, size: 16),
-                          label: Text('Building: $selectedBuilding'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () {
-                            setState(() {
-                              selectedBuilding = 'All';
-                            });
-                          },
-                        ),
-                      if (selectedFloor != 'All')
-                        Chip(
-                          avatar: const Icon(Icons.stairs, size: 16),
-                          label: Text('Floor: $selectedFloor'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () {
-                            setState(() {
-                              selectedFloor = 'All';
-                            });
-                          },
-                        ),
-                      if (selectedCapacity != 'All')
-                        Chip(
-                          avatar: const Icon(Icons.people, size: 16),
-                          label: Text('Capacity: $selectedCapacity'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () {
-                            setState(() {
-                              selectedCapacity = 'All';
-                            });
-                          },
-                        ),
-                      if (selectedRatingSort != 'None')
-                        Chip(
-                          avatar: const Icon(Icons.star, size: 16),
-                          label: Text('Rating: $selectedRatingSort'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () {
-                            setState(() {
-                              selectedRatingSort = 'None';
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          
-          // No Filters Applied Info
-          if (!isFilterExpanded && !hasActiveFilters)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                border: Border(
-                  bottom: BorderSide(color: Colors.blue[100]!, width: 1),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Colors.blue),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: const Text(
-                      'Showing all available classrooms. Use filters to narrow your search.',
-                      style: TextStyle(color: Colors.blue),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Rooms List
+          // StreamBuilder to listen for real-time updates
           Expanded(
-            child: getFilteredRooms().isEmpty
-                ? const Center(
+            child: StreamBuilder<List<RoomModel>>(
+              stream: _firestoreService.getRoomsStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error loading rooms: ${snapshot.error}'));
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text('No available classrooms found.'));
+                }
+
+                // Apply client-side filters to the data from the stream
+                final allRooms = snapshot.data!;
+                final filteredRooms = getFilteredRooms(allRooms);
+
+                if (filteredRooms.isEmpty) {
+                  return const Center(
                     child: Text(
-                      'No rooms match your filters',
+                      'No classrooms match your filters',
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.grey,
                       ),
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: getFilteredRooms().length,
-                    itemBuilder: (context, index) {
-                      final room = getFilteredRooms()[index];
-                      return Card(
-                        margin: const EdgeInsets.all(8),
-                        child: ListTile(
-                          leading: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(4),
-                              color: Colors.grey[200],
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: room.imageUrl != null && room.imageUrl!.isNotEmpty
+                  );
+                }
+
+                // Display the filtered rooms in a ListView
+                return ListView.builder(
+                  itemCount: filteredRooms.length,
+                  itemBuilder: (context, index) {
+                    final room = filteredRooms[index];
+                    return Card(
+                      margin: const EdgeInsets.all(8),
+                      child: ListTile(
+                        leading: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            color: Colors.grey[200],
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: room.imageUrl != null && room.imageUrl!.isNotEmpty
                               ? Image.network(
                                   room.imageUrl!,
                                   fit: BoxFit.cover,
@@ -404,39 +277,42 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                                   color: Colors.blue[800],
                                   size: 28,
                                 ),
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Room ${room.id}',
-                                  overflow: TextOverflow.ellipsis,
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                // Use room.name instead of room.id for the title
+                                room.name, // Display the room name
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // Show rating with constrained size
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star, color: Colors.amber, size: 16),
+                                SizedBox(width: 2),
+                                Text(
+                                  room.rating.toStringAsFixed(1),
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
-                              ),
-                              // Show rating with constrained size
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.star, color: Colors.amber, size: 16),
-                                  SizedBox(width: 2),
-                                  Text(
-                                    room.rating.toStringAsFixed(1),
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Building ${room.building} - Floor ${room.floor}'),
-                              Text('Capacity: ${room.capacity} people'),
-                              if (room.features.isNotEmpty)
-                                Wrap(
-                                  spacing: 4,
-                                  runSpacing: 4,
-                                  children: room.features.map((feature) => 
+                              ],
+                            ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Display building and floor using room properties
+                            Text('Building ${room.building} - Floor ${room.floor}'),
+                            // Display capacity using room property
+                            Text('Capacity: ${room.capacity} people'),
+                            if (room.features.isNotEmpty)
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: room.features.map((feature) =>
                                     Chip(
                                       label: Text(
                                         feature,
@@ -445,27 +321,29 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
                                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       padding: EdgeInsets.zero,
                                       labelPadding: EdgeInsets.symmetric(horizontal: 4),
-                                    )
-                                  ).toList(),
-                                ),
-                            ],
-                          ),
-                          isThreeLine: true,
-                          trailing: const Icon(Icons.arrow_forward_ios),
-                          onTap: () {
-                            NavigationHelper.navigateToRoomDetail(
-                              context,
-                              {
-                                'roomId': room.id,
-                                'building': room.building,
-                                'floor': room.floor,
-                              },
-                            );
-                          },
+                                    ))
+                                    .toList(),
+                              ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
+                        isThreeLine: true,
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () {
+                          NavigationHelper.navigateToRoomDetail(
+                            context,
+                            {
+                              'roomId': room.id,
+                              'building': room.building,
+                              'floor': room.floor,
+                            },
+                          );
+                        },
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),

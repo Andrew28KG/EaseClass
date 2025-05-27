@@ -31,7 +31,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   final AuthService _authService = AuthService();
   UserModel? _currentUser;
   List<RoomModel> _availableRooms = [];
-  List<ClassModel> _recentClasses = []; // Renamed from _availableClasses to use it for Recent Classes
+  List<RoomModel> _recentClasses = []; // Renamed from _availableClasses to use it for Recent Classes
   List<BookingModel> _recentBookings = [];
   List<FAQModel> _faqs = [];
   bool _isLoading = true;
@@ -59,21 +59,27 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         final currentFirebaseUser = FirebaseAuth.instance.currentUser;
         if (currentFirebaseUser != null) {
           _isAdmin = await _authService.isCurrentUserAdmin();
-      }
+        }
       
-        final availableRooms = await _firestoreService.getAvailableRooms();
-        final availableClasses = await _firestoreService.getAvailableClasses();
-        final currentBookings = await _firestoreService.getOngoingBookings();
-        final faqs = await _firestoreService.getFAQs();
+        // Get all rooms and sort them by rating
+        final allRooms = await _firestoreService.getRooms();
+        allRooms.sort((a, b) => b.rating.compareTo(a.rating));
         
-        availableRooms.sort((a, b) => b.rating.compareTo(a.rating));
+        // Get available rooms (isAvailable = true)
+        final availableRooms = allRooms.where((room) => room.isAvailable).toList();
+        
+        // Get highest rated rooms (top 3)
+        final highestRatedRooms = allRooms.take(3).toList();
+        
+        // Get FAQs
+        final faqs = await _firestoreService.getFAQs();
+        debugPrint('Fetched ${faqs.length} FAQs.');
         
         if (mounted) {
           setState(() {
             _currentUser = currentUser;
             _availableRooms = availableRooms;
-            _recentClasses = availableClasses;
-            _recentBookings = currentBookings.take(3).toList();
+            _recentClasses = highestRatedRooms; // Use highest rated rooms instead of classes
             _faqs = faqs;
             _isLoading = false;
           });
@@ -82,7 +88,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         NavigationHelper.navigateToLogin(context);
       }
     } catch (e) {
-      print('Error loading data: $e');
+      debugPrint('Error loading data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -512,13 +518,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               ),
               const SizedBox(height: 10),
               Container(
-                          height: 160, // Reduced from 180
+                height: 180,
                 child: _availableRooms.isEmpty
-                    ? Center(child: Text('No available rooms found'))
+                    ? Center(child: Text('No available classrooms found'))
                     : ListView.builder(
-                  scrollDirection: Axis.horizontal,
+                        scrollDirection: Axis.horizontal,
                         itemCount: min(5, _availableRooms.length),
-                  itemBuilder: (context, index) {
+                        itemBuilder: (context, index) {
                           final room = _availableRooms[index];
                           return InkWell(
                             onTap: () {
@@ -532,16 +538,16 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               );
                             },
                             child: Container(
-                      width: 200,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
-                        border: Border.all(
-                          color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
-                          width: 1,
-                        ),
-                      ),
+                              width: 200,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: index % 2 == 0 ? AppColors.primary.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1),
+                                border: Border.all(
+                                  color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
+                                  width: 1,
+                                ),
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -579,7 +585,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   ),
                                   // Room details section
                                   Padding(
-                                    padding: const EdgeInsets.all(10.0),
+                                    padding: const EdgeInsets.all(8.0),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
@@ -587,7 +593,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: AppColors.white,
                                                 borderRadius: BorderRadius.circular(12),
@@ -595,8 +601,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                                   color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
                                                 ),
                                               ),
-                                            child: Text(
-                                                'Room ${room.id.substring(0, min(6, room.id.length))}', // Truncate ID for display
+                                              child: Text(
+                                                room.name,
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
@@ -610,17 +616,18 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 4),
+                                        const SizedBox(height: 2),
                                         Text(
                                           'Building ${room.building}',
                                           style: const TextStyle(
-                                            fontSize: 14,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                         Text(
                                           'Floor ${room.floor}',
-                                          style: const TextStyle(fontSize: 14),
+                                          style: const TextStyle(fontSize: 13),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                         // Rating row
                                         Row(
@@ -628,7 +635,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                           children: [
                                             Text(
                                               'Rating: ',
-                                              style: const TextStyle(fontSize: 11),
+                                              style: const TextStyle(fontSize: 10),
                                             ),
                                             ...List.generate(
                                               5,
@@ -645,7 +652,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                               '${room.rating.toStringAsFixed(1)}',
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 11,
+                                                fontSize: 10,
                                               ),
                                             ),
                                           ],
@@ -658,7 +665,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                               style: TextStyle(
                                                 color: index % 2 == 0 ? AppColors.primary : AppColors.secondary,
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 11,
+                                                fontSize: 10,
                                               ),
                                             ),
                                             Icon(
@@ -673,10 +680,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   ),
                                 ],
                               ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
                       ],
                     ),
@@ -743,172 +750,106 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: min(3, _recentClasses.length),
                     itemBuilder: (context, index) {
-                      final classItem = _recentClasses[index];
-                      final roomFeatures = [
-                        ['Smart Projector', 'Air Conditioning', 'Adjustable Lighting'],
-                        ['Surround Sound', 'Smart Boards', 'Ergonomic Furniture'],
-                        ['Video Conferencing', 'Recording Equipment', 'High-speed Internet']
-                      ][index % 3]; // Use modulo to handle any number of classes
-                      
+                      final room = _recentClasses[index];
                       return Card(
-                              elevation: 2,
-                              margin: EdgeInsets.only(bottom: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: AppColors.primary.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: InkWell(
-                      onTap: () {
-                                  // Navigate to room detail
-                                  NavigationHelper.navigateToRoomDetail(
-                                    context,
-                                    {
-                                      'roomId': classItem.id,
-                                      'building': classItem.building,
-                                      'floor': classItem.floor,
-                                    },
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Room image placeholder
-                                          Container(
-                                            width: 80,
-                                            height: 80,
-                                            decoration: BoxDecoration(
-                                              color: AppColors.secondary.withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: Icon(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          onTap: () {
+                            NavigationHelper.navigateToRoomDetail(
+                              context,
+                              {
+                                'roomId': room.id,
+                                'building': room.building,
+                                'floor': room.floor,
+                              },
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Room image placeholder
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: room.imageUrl != null && room.imageUrl!.isNotEmpty
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(
+                                            room.imageUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) => Icon(
                                               Icons.meeting_room,
                                               size: 36,
                                               color: AppColors.secondary,
                                             ),
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                      Text(
-                                                        'Premium Room ${classItem.id.substring(0, min(6, classItem.id.length))}',
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.w600,
-                                                          fontSize: 16,
-                                                        ),
-                                                      ),
-                                                      Container(
-                                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                        decoration: BoxDecoration(
-                                                          color: AppColors.highlight.withOpacity(0.2),
-                                                          borderRadius: BorderRadius.circular(12),
-                                                        ),
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(Icons.star, color: AppColors.highlight, size: 16),
-                                                            SizedBox(width: 2),
-                                                            Text(
-                                                              classItem.rating.toStringAsFixed(1),
-                                                              style: TextStyle(
-                                                                fontWeight: FontWeight.bold,
-                                                                color: AppColors.highlight,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                                SizedBox(height: 6),
-                                                Text(
-                                                  'Building ${classItem.building}, Floor ${classItem.floor}',
-                                                  style: TextStyle(
-                                                    color: AppColors.black.withOpacity(0.7),
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4),
-                                                Text(
-                                                  'Capacity: ${classItem.capacity} students',
-                                                  style: TextStyle(
-                                                    color: AppColors.black.withOpacity(0.7),
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: 10),
-                                      Divider(),
-                                      SizedBox(height: 6),
+                                        )
+                                      : Icon(
+                                          Icons.meeting_room,
+                                          size: 36,
+                                          color: AppColors.secondary,
+                                        ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        'Room Features:',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
+                                        room.name,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      SizedBox(height: 6),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 6,
-                                        children: roomFeatures.map((feature) => Container(
-                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: AppColors.primary.withOpacity(0.3),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            feature,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                        )).toList(),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Building ${room.building} - Floor ${room.floor}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      SizedBox(height: 6),
+                                      const SizedBox(height: 4),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
                                         children: [
-                                          Text(
-                                            'View Details',
-                                            style: TextStyle(
-                                              color: AppColors.secondary,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
                                           Icon(
-                                            Icons.arrow_forward_ios,
-                                            size: 14,
-                                            color: AppColors.secondary,
+                                            Icons.star,
+                                            color: AppColors.highlight,
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '${room.rating.toStringAsFixed(1)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.highlight,
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ],
                                   ),
                                 ),
-                    ),
-                  );
-                },
-              ),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 16,
+                                  color: AppColors.secondary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                       ],
                     ),
                   ),
@@ -928,37 +869,59 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 ),
               ),
               const SizedBox(height: 10),
-                        _faqs.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'FAQs are not available',
-                                  style: TextStyle(color: Colors.grey),
+                        // Use StreamBuilder to listen for real-time FAQ updates
+                        StreamBuilder<List<FAQModel>>(
+                          stream: _firestoreService.getFAQsStream(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snapshot.hasError) {
+                              return Center(child: Text('Error loading FAQs: ${snapshot.error}'));
+                            }
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'FAQs are not available',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
                                 ),
-                              ),
-                            )
-                          : Column(
-                              children: _faqs.take(5).map((faq) { // Show first 5 FAQs
+                              );
+                            }
+
+                            final faqs = snapshot.data!;
+
+                            return Column(
+                              children: faqs.take(5).map((faq) {
                                 return Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
                                   child: ExpansionTile(
-                                    title: Text(faq.question),
-                textColor: AppColors.secondary,
-                iconColor: AppColors.accent,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
+                                    title: Text(
+                                      faq.question,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    textColor: AppColors.secondary,
+                                    iconColor: AppColors.accent,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: Text(
                                           faq.answer,
-                      style: TextStyle(color: AppColors.black),
+                                          style: TextStyle(color: AppColors.black),
                                         ),
                                       ),
                                     ],
                                   ),
                                 );
                               }).toList(),
-                            ),
-                        if (_faqs.length > 5)
+                            );
+                          },
+                        ),
+                        if (_faqs.length > 5) // This check still uses the old _faqs list, should be updated if needed
                           Center(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8.0),

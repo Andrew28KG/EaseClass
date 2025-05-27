@@ -106,6 +106,40 @@ class FirestoreService {
     }
   }
 
+  Future<void> addRoom(RoomModel room) async {
+    try {
+      await _roomsCollection.doc(room.id).set(room.toMap());
+    } catch (e) {
+      print('Error adding room: $e');
+      rethrow; // Re-throw the error for the caller to handle
+    }
+  }
+
+  Future<void> deleteRoom(String roomId) async {
+    try {
+      await _roomsCollection.doc(roomId).delete();
+    } catch (e) {
+      print('Error deleting room: $e');
+      rethrow; // Re-throw the error for the caller to handle
+    }
+  }
+
+  Future<void> updateRoom(String roomId, Map<String, dynamic> updatedData) async {
+    try {
+      await _roomsCollection.doc(roomId).update(updatedData);
+    } catch (e) {
+      print('Error updating room: $e');
+      rethrow; // Re-throw the error for the caller to handle
+    }
+  }
+
+  // Stream for real-time room updates
+  Stream<List<RoomModel>> getRoomsStream() {
+    return _roomsCollection.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => RoomModel.fromFirestore(doc)).toList();
+    });
+  }
+
   // Class operations
   Future<List<ClassModel>> getAvailableClasses() async {
     try {
@@ -188,6 +222,21 @@ class FirestoreService {
       print('Error getting FAQs: $e');
       return [];
     }
+  }
+
+  // Stream for real-time FAQ updates
+  Stream<List<FAQModel>> getFAQsStream({String? category}) {
+    Query query = _faqsCollection.where('isActive', isEqualTo: true);
+    
+    if (category != null) {
+      query = query.where('category', isEqualTo: category);
+    }
+    
+    query = query.orderBy('order'); // Assuming 'order' field exists for sorting, or use 'createdAt'
+    
+    return query.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => FAQModel.fromFirestore(doc)).toList();
+    });
   }
 
   Future<List<String>> getFAQCategories() async {
