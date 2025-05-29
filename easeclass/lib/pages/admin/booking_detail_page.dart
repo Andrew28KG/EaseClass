@@ -147,13 +147,14 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Booking ID: ${currentBooking.id}',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 14,
-                    ),
-                  ),
+                  // Removed Booking ID as requested
+                  // Text(
+                  //   'Booking ID: ${currentBooking.id}',
+                  //   style: TextStyle(
+                  //     color: Colors.grey.shade600,
+                  //     fontSize: 14,
+                  //   ),
+                  // ),
                 ],
               ),
             ),
@@ -222,7 +223,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
             ),
             const SizedBox(height: 16),
             _buildDetailRow('Date', currentBooking.date),
-            _buildDetailRow('Time', currentBooking.time),
+            _buildDetailRow('Time', _formatTimeWithDuration(currentBooking.time, currentBooking.duration ?? 1)),
             _buildDetailRow('Purpose', currentBooking.purpose),
             _buildDetailRow(
               'Created At', 
@@ -263,7 +264,6 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
             ),
             const SizedBox(height: 16),
             _buildDetailRow('User Name', userDetails?['name'] ?? 'Anonymous'),
-            _buildDetailRow('User ID', currentBooking.userId),
           ],
         ),
       ),
@@ -456,5 +456,29 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
     } catch (e) {
       return 'N/A';
     }
+  }
+
+  // Helper to format time with duration
+  String _formatTimeWithDuration(String time, int duration) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    // Parse the time
+    final timeComponents = timeValue.split(':');
+    final hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    // Calculate end time
+    final startTime = DateTime(2024, 1, 1, hour, minute);
+    final endTime = startTime.add(Duration(hours: duration));
+    
+    // Format end time
+    final endHour = endTime.hour;
+    final endMinute = endTime.minute;
+    final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+    final formattedEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+    
+    return '$time - ${formattedEndHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')} $endPeriod';
   }
 }

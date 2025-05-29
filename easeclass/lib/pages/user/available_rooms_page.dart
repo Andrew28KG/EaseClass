@@ -40,12 +40,12 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
 
   void _applyInitialFilters() {
     if (widget.applyFilter != null) {
-      setState(() {
+        setState(() {
         if (widget.applyFilter!['ratingSort'] != null) {
           _selectedRatingSort = widget.applyFilter!['ratingSort'];
-        }
-      });
-    }
+          }
+        });
+      }
   }
 
   Future<void> _loadFilterOptions() async {
@@ -56,25 +56,25 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
     final floors = classes.map((c) => c.floor.toString()).toSet().toList()..sort();
     final capacities = classes.map((c) => c.capacity.toString()).toSet().toList()..sort();
 
-    setState(() {
+        setState(() {
       _buildings = ['All', ...buildings];
       _floors = ['All', ...floors];
       _capacities = ['All', ...capacities];
-    });
-  }
+      });
+    }
 
   List<ClassModel> getFilteredClasses(List<ClassModel> classes) {
     return classes.where((classItem) {
       // Filter by building
       if (_selectedBuilding != 'All' && classItem.building != _selectedBuilding) {
         return false;
-      }
-
+    }
+    
       // Filter by floor
       if (_selectedFloor != 'All' && classItem.floor.toString() != _selectedFloor) {
         return false;
-      }
-
+    }
+    
       // Filter by capacity
       if (_selectedCapacity != 'All' && classItem.capacity.toString() != _selectedCapacity) {
         return false;
@@ -92,7 +92,7 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
           return b.rating.compareTo(a.rating);
         } else if (_selectedRatingSort == 'Lowest to Highest') {
           return a.rating.compareTo(b.rating);
-        }
+      }
         return 0;
       });
   }
@@ -128,6 +128,19 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
             ),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isFilterExpanded ? Icons.filter_list_off : Icons.filter_list,
+              color: Colors.white,
+            ),
+                  onPressed: () {
+              setState(() {
+                _isFilterExpanded = !_isFilterExpanded;
+                    });
+                  },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -145,24 +158,24 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
             capacities: _capacities,
             ratingSortOptions: _ratingSortOptions,
             onBuildingChanged: (value) {
-              setState(() {
+                setState(() {
                 _selectedBuilding = value ?? 'All';
-              });
+                });
             },
             onFloorChanged: (value) {
-              setState(() {
+                setState(() {
                 _selectedFloor = value ?? 'All';
-              });
+                });
             },
             onCapacityChanged: (value) {
-              setState(() {
+                setState(() {
                 _selectedCapacity = value ?? 'All';
-              });
+                });
             },
             onRatingSortChanged: (value) {
-              setState(() {
+                setState(() {
                 _selectedRatingSort = value ?? 'None';
-              });
+                });
             },
             onDateChanged: (value) {
               if (value != null) {
@@ -214,85 +227,140 @@ class _AvailableRoomsPageState extends State<AvailableRoomsPage> {
 
                 // Display the filtered classes in a ListView
                 return ListView.builder(
+                  padding: const EdgeInsets.all(8),
                   itemCount: filteredClasses.length,
                   itemBuilder: (context, index) {
                     final classItem = filteredClasses[index];
                     return Card(
-                      margin: const EdgeInsets.all(8),
-                      child: ListTile(
-                        leading: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(4),
-                            color: Colors.grey[200],
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: classItem.imageUrl != null && classItem.imageUrl!.isNotEmpty
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          NavigationHelper.navigateToClassDetails(context, classItem);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Room image
+                            ClipRRect(
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                              child: AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: classItem.imageUrl != null && classItem.imageUrl!.isNotEmpty
                               ? Image.network(
-                                  classItem.imageUrl!,
+                                        classItem.imageUrl!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Icon(
+                                        errorBuilder: (context, error, stackTrace) => Container(
+                                          color: AppColors.secondary.withOpacity(0.1),
+                                          child: Icon(
                                     Icons.meeting_room,
-                                    color: Colors.blue[800],
-                                    size: 28,
+                                            size: 48,
+                                            color: AppColors.secondary,
+                                          ),
                                   ),
                                 )
-                              : Icon(
+                                    : Container(
+                                        color: AppColors.secondary.withOpacity(0.1),
+                                        child: Icon(
                                   Icons.meeting_room,
-                                  color: Colors.blue[800],
-                                  size: 28,
+                                          size: 48,
+                                          color: AppColors.secondary,
+                                        ),
+                                      ),
                                 ),
                         ),
-                        title: Row(
+                            // Room information
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                classItem.name,
+                                  Text(
+                                    classItem.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.business,
+                                        size: 16,
+                                        color: Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Building ${classItem.building}',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Icon(
+                                        Icons.stairs,
+                                        size: 16,
+                                        color: Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Floor ${classItem.floor}',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
                               children: [
-                                Icon(Icons.star, color: Colors.amber, size: 16),
-                                SizedBox(width: 2),
+                                      Icon(
+                                        Icons.people,
+                                        size: 16,
+                                        color: Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 4),
                                 Text(
-                                  classItem.rating.toStringAsFixed(1),
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                        'Capacity: ${classItem.capacity} people',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.star,
+                                            size: 16,
+                                            color: Colors.amber,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            classItem.rating.toStringAsFixed(1),
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Building ${classItem.building} - Floor ${classItem.floor}'),
-                            Text('Capacity: ${classItem.capacity} people'),
-                            if (classItem.features.isNotEmpty)
-                              Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                children: classItem.features.map((feature) =>
-                                    Chip(
-                                      label: Text(
-                                        feature,
-                                        style: TextStyle(fontSize: 10),
-                                      ),
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      padding: EdgeInsets.zero,
-                                      labelPadding: EdgeInsets.symmetric(horizontal: 4),
-                                    ))
-                                    .toList(),
+                                ],
+                              ),
                               ),
                           ],
                         ),
-                        isThreeLine: true,
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () {
-                          NavigationHelper.navigateToClassDetails(context, classItem);
-                        },
                       ),
                     );
                   },

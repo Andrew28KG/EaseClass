@@ -71,10 +71,10 @@ class AdminSettingsPage extends StatelessWidget {
                 ),
                 const Divider(),
 
-                // Admin Settings Section
+                // Admin Help Section
                 const ListTile(
                   title: Text(
-                    'Admin Controls',
+                    'Admin Help',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -82,27 +82,30 @@ class AdminSettingsPage extends StatelessWidget {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.room_preferences),
-                  title: const Text('Room Management'),
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('User Management Help'),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
-                    // Navigate to room management
+                    // Navigate to User Management Help Page
+                    Navigator.pushNamed(context, '/admin-user-management-help');
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.people),
-                  title: const Text('User Management'),
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('Class Management Help'),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
-                    // Handle user management
+                    // Navigate to Class Management Help Page
+                    Navigator.pushNamed(context, '/admin-class-management-help');
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.settings),
-                  title: const Text('System Settings'),
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('Content Management Help'),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
-                    // Handle system settings
+                    // Navigate to Content Management Help Page
+                    Navigator.pushNamed(context, '/admin-content-management-help');
                   },
                 ),
                 const Divider(),

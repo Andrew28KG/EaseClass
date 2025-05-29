@@ -4,6 +4,7 @@ import '../../services/booking_service.dart';
 import '../../models/booking_model.dart';
 import '../../theme/app_colors.dart';
 import '../admin/booking_detail_page.dart';
+import 'user_history_booking_detail_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class UserBookingHistoryPage extends StatefulWidget {
@@ -34,15 +35,25 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
       // Get completed and cancelled bookings for this tab
       final completedBookings = await _bookingService.getBookingsByStatus('completed').first;
       final cancelledBookingsSnapshot = await FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid).where('status', isEqualTo: 'cancelled').get();
+      // Fetch rejected bookings for the current user
+      final rejectedBookingsSnapshot = await FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid).where('status', isEqualTo: 'rejected').get();
 
       // Combine and map the results
       final cancelledBookings = cancelledBookingsSnapshot.docs.map((doc) => BookingModel.fromFirestore(doc)).toList();
-      final allHistoryBookings = [...completedBookings, ...cancelledBookings];
+      final rejectedBookings = rejectedBookingsSnapshot.docs.map((doc) => BookingModel.fromFirestore(doc)).toList();
+      final allHistoryBookings = [...completedBookings, ...cancelledBookings, ...rejectedBookings];
 
       if (mounted) {
         setState(() {
           // Convert BookingModel objects to maps for the _allBookings list
-          _allBookings = allHistoryBookings.map((booking) => booking.toMap()).toList();
+          _allBookings = allHistoryBookings
+              .where((booking) =>
+                  booking.roomDetails != null && // Ensure roomDetails is not null
+                  booking.roomDetails['name'] != null && // Check for class-specific fields
+                  booking.roomDetails['building'] != null &&
+                  booking.roomDetails['floor'] != null)
+              .map((booking) => booking.toMap())
+              .toList();
           
           // Sort by date, most recent first
           _allBookings.sort((a, b) => b['createdAt'].compareTo(a['createdAt']));
@@ -178,71 +189,149 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
 
   Widget _buildBookingHistoryCard(Map<String, dynamic> booking) {
     // Minimal user info only
+    final isRejected = booking['status'] == 'rejected';
     return Card(
       elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0), // Adjust margin
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        title: Text(
-          booking['roomName'] ?? 'Unknown Room',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+        borderRadius: BorderRadius.circular(12), // Slightly smaller radius
+        side: BorderSide( // Add border based on status
+           color: _getStatusColor(booking['status']).withOpacity(0.3),
+           width: 1,
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 16, color: AppColors.darkGrey),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    '${booking['date'] ?? 'No date'} | ${booking['time'] ?? 'No time'}',
-                    style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 16, color: AppColors.darkGrey),
-                const SizedBox(width: 4),
-                Text(
-                  'Building ${booking['building']} - Floor ${booking['floor']}',
-                  style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
-                ),
-              ],
-            ),
-            if ((booking['purpose'] ?? '').toString().isNotEmpty) ...[
-              const SizedBox(height: 4),
+      ),
+      child: InkWell( // Use InkWell for tap effect
+        onTap: () => _navigateToBookingDetail(booking),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  const Icon(Icons.description, size: 16, color: AppColors.darkGrey),
-                  const SizedBox(width: 4),
-                  Flexible(
+                  Icon(
+                    isRejected ? Icons.cancel : Icons.check_circle,
+                    color: isRejected ? Colors.red : _getStatusColor(booking['status']),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
                     child: Text(
-                      booking['purpose'],
-                      style: const TextStyle(fontSize: 13, color: AppColors.darkGrey, fontStyle: FontStyle.italic),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      booking['roomDetails']?['name'] ?? booking['roomName'] ?? 'Room',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ),
+                  if (isRejected)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red),
+                      ),
+                      child: const Text(
+                        'REJECTED',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                 ],
               ),
+              const SizedBox(height: 8),
+              Text('Date: ${booking['date'] ?? ''}'),
+              Text('Time: ${booking['time'] ?? ''}'),
+              if (isRejected && booking['adminResponseReason'] != null && booking['adminResponseReason'].toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    'Reason: ${booking['adminResponseReason']}',
+                    style: const TextStyle(color: Colors.red, fontStyle: FontStyle.italic),
+                  ),
+                ),
             ],
-          ],
+          ),
         ),
-        onTap: () => _navigateToBookingDetail(booking),
       ),
     );
+  }
+
+  // Helper function for info rows (copy from UserBookedRoomsPage)
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AppColors.darkGrey.withOpacity(0.8)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: AppColors.darkGrey.withOpacity(0.8),
+              fontSize: 14,
+            ),
+            overflow: TextOverflow.ellipsis, // Add overflow handling
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper function for status chip (copy from UserBookedRoomsPage)
+  Widget _buildStatusChip(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _getStatusColor(status).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        _getStatusText(status),
+        style: TextStyle(
+          color: _getStatusColor(status),
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+
+   // Helper function for status text (copy from UserBookedRoomsPage)
+  String _getStatusText(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'process':
+        return '⏱️ Pending';
+      case 'approved':
+        return '✅ Approved';
+      case 'completed':
+        return '✓ Completed';
+      case 'cancelled':
+        return '❌ Cancelled';
+      case 'rejected':
+        return '❌ Rejected';
+      default:
+        return status;
+    }
+  }
+
+  // Helper function for status color (copy from UserBookedRoomsPage)
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'process':
+        return AppColors.warning;
+      case 'approved':
+        return AppColors.success;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   void _navigateToBookingDetail(Map<String, dynamic> booking) {
@@ -270,12 +359,15 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
       userDetails: {
         'name': booking['userName'],
       },
+      duration: booking['duration'] ?? 1, // Pass duration
+      extraItemsNotes: booking['extraItemsNotes'], // Pass extraItemsNotes
+      adminResponseReason: booking['adminResponseReason'], // Pass adminResponseReason
     );
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => BookingDetailPage(booking: bookingModel),
+        builder: (context) => UserHistoryBookingDetailPage(booking: bookingModel), // Navigate to the new page
       ),
     );
   }

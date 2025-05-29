@@ -76,6 +76,7 @@ class _AdminBookingProgressPageState extends State<AdminBookingProgressPage> {
       'status': booking.status,
       'createdAt': booking.createdAt.toDate(),
       'userName': booking.userDetails?['name'] ?? 'Anonymous',
+      'duration': booking.duration,
     };
   }
   void _applyFilter() {
@@ -143,6 +144,30 @@ class _AdminBookingProgressPageState extends State<AdminBookingProgressPage> {
 
   String _formatTime(String timeStr) {
     return timeStr; // Already in HH:MM - HH:MM format
+  }
+
+  // Helper to format time with duration (copied from user booking detail page)
+  String _formatTimeWithDuration(String time, int duration) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    // Parse the time
+    final timeComponents = timeValue.split(':');
+    final hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    // Calculate end time
+    final startTime = DateTime(2024, 1, 1, hour, minute);
+    final endTime = startTime.add(Duration(hours: duration));
+    
+    // Format end time
+    final endHour = endTime.hour;
+    final endMinute = endTime.minute;
+    final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+    final formattedEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+    
+    return '$time - ${formattedEndHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')} $endPeriod';
   }
 
   String _getProgressStatus(Map<String, dynamic> booking) {
@@ -287,63 +312,31 @@ class _AdminBookingProgressPageState extends State<AdminBookingProgressPage> {
                               ),
                               const SizedBox(height: 12),
                               
-                              // Date and Time
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
+                              // Booking Details
+                              Row(
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
+                                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                  const SizedBox(width: 8),
                                           Text(
-                                            'Date',
+                                    booking['date'],
                                             style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),                                                  Text(
-                                            _formatDate(booking['date']),
-                                            style: const TextStyle(
                                               fontSize: 14,
-                                              fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  const SizedBox(width: 24),
+                                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                                  const SizedBox(width: 8),
+                                          Text(
+                                    _formatTimeWithDuration(booking['time'], booking['duration'] ?? 1),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                      color: Colors.grey[700],
                                             ),
                                           ),
                                         ],
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Time',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            _formatTime(booking['time']),
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
+                              const SizedBox(height: 8),
                             ],
                           ),
                         ),

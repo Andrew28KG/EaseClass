@@ -13,6 +13,9 @@ import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import '../../services/auth_service.dart'; // Import Auth Service for admin check
 import '../../services/event_service.dart'; // Import Event Service
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore for Timestamp if needed, though EventModel handles it
+import '../../pages/user/news_page.dart'; // Ensure NewsPage is imported
+import '../../models/notification_model.dart';
+import 'user_notifications_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -38,6 +41,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   
   // Use a Stream to get events from Firestore
   final EventService _eventService = EventService();
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   @override
   void initState() {
@@ -70,11 +74,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         // Get highest rated classes (top 3)
         final highestRatedClasses = allClasses.take(3).toList();
         
-        // Get current user's bookings
+        // Get current user's bookings and take only the first 3
         final userBookings = await _firestoreService.getUserBookings(currentFirebaseUser.uid);
-        final currentBookings = userBookings.where((booking) => 
-          booking.status == 'approved' || booking.status == 'pending'
-        ).toList();
+        final currentBookings = userBookings
+            .where((booking) => booking.status == 'approved' || booking.status == 'pending')
+            .take(3) // Limit to a maximum of 3 bookings
+            .toList();
         
         // Get FAQs
         final faqs = await _firestoreService.getFAQs();
@@ -124,6 +129,70 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
+  Stream<List<NotificationModel>> _userNotificationsStream() {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const Stream.empty();
+    return FirebaseFirestore.instance
+        .collection('notifications')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => NotificationModel.fromFirestore(doc)).toList());
+  }
+
+  Future<void> _markAllNotificationsRead(List<NotificationModel> notifications) async {
+    final unread = notifications.where((n) => !n.isRead).toList();
+    for (final n in unread) {
+      await FirebaseFirestore.instance.collection('notifications').doc(n.id).update({'isRead': true});
+    }
+  }
+
+  void _showNotificationsDialog(List<NotificationModel> notifications) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notifications'),
+        content: SizedBox(
+          width: 350,
+          child: notifications.isEmpty
+              ? const Text('No notifications')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final n = notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        n.type == 'approved'
+                            ? Icons.check_circle
+                            : n.type == 'rejected'
+                                ? Icons.cancel
+                                : Icons.info,
+                        color: n.type == 'approved'
+                            ? Colors.green
+                            : n.type == 'rejected'
+                                ? Colors.red
+                                : Colors.blue,
+                      ),
+                      title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.normal : FontWeight.bold)),
+                      subtitle: Text(n.body),
+                      trailing: n.isRead ? null : const Icon(Icons.fiber_manual_record, color: Colors.blue, size: 12),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    // Mark all as read after dialog is closed
+    await _markAllNotificationsRead(notifications);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,7 +231,41 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 ),
               ],
             ),
-            actions: [],
+            actions: [
+              StreamBuilder<List<NotificationModel>>(
+                stream: _userNotificationsStream(),
+                builder: (context, snapshot) {
+                  final notifications = snapshot.data ?? [];
+                  final hasUnread = notifications.any((n) => !n.isRead);
+                  return Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_none, color: Colors.white),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const UserNotificationsPage()),
+                          );
+                        },
+                      ),
+                      if (hasUnread)
+                        Positioned(
+                          right: 10,
+                          top: 10,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
             flexibleSpace: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -223,8 +326,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   style: const TextStyle(
                                     fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  ),
                                 ),
+                              ),
                                     Text(
                                   _currentUser?.email ?? '',
                                       style: TextStyle(
@@ -310,7 +413,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
-                                NavigationHelper.navigateToBookings(context);
+                                // Use navigateToTab to switch to the bookings tab (index 2 for user)
+                                NavigationHelper.navigateToTab(context, 2);
                               },
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -334,13 +438,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         ),
                         const SizedBox(height: 10),
                         _recentBookings.isEmpty 
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
+                          ? const Center(
                                 child: Text(
-                                  'No current bookings',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
+                                'No current bookings.',
+                                style: TextStyle(fontSize: 16, color: Colors.grey),
                               ),
                             )
                           : ListView.builder(
@@ -366,6 +467,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 }
                                 
                                 return Card(
+                                  margin: const EdgeInsets.only(bottom: 8.0),
+                                  child: InkWell(
+                                    onTap: () {
+                                      // Navigate to booking detail page
+                                      NavigationHelper.navigateToUserBookingDetails(context, booking);
+                                    },
                                   child: Padding(
                                     padding: const EdgeInsets.all(12.0),
                                     child: Row(
@@ -388,9 +495,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                booking.roomDetails != null 
-                                                    ? (booking.roomDetails!['name'] as String? ?? 'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}')
-                                                    : 'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}',
+                                                  booking.roomDetails != null 
+                                                      ? (booking.roomDetails!['name'] as String? ?? 'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}')
+                                                      : 'Room ${booking.roomId.substring(0, min(6, booking.roomId.length))}',
                                                 style: const TextStyle(
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 16,
@@ -427,6 +534,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                           ),
                                         ),
                                       ],
+                                      ),
                                     ),
                                   ),
                                 );
@@ -505,9 +613,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
+                                // Use navigateToTab to switch to the available classes tab (index 1)
                                 NavigationHelper.navigateToAvailableClasses(
                                   context,
-                                  applyFilter: {'sortBy': 'rating', 'order': 'desc'},
+                                  applyFilter: {'ratingSort': 'Highest to Lowest'},
                                 );
                               },
                               child: Row(
@@ -551,14 +660,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         margin: const EdgeInsets.only(bottom: 8),
                               child: InkWell(
                       onTap: () {
-                                  NavigationHelper.navigateToRoomDetail(
-                                    context,
-                                    {
-                                'roomId': room.id,
-                                'building': room.building,
-                                'floor': room.floor,
-                                    },
-                                  );
+                                  // Navigate to class detail page instead of room detail
+                                  NavigationHelper.navigateToClassDetails(context, room);
                                 },
                                 child: Padding(
                                   padding: const EdgeInsets.all(12.0),
@@ -657,15 +760,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 40), // Increased space from navbar
-                        Text(
-                          'Frequently Asked Questions',
-                          style: TextStyle(
+              Text(
+                'Frequently Asked Questions',
+                style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 10),
                         StreamBuilder<List<FAQModel>>(
                           stream: _firestoreService.getFAQsStream(),
                           builder: (context, snapshot) {
@@ -677,13 +780,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             }
                             if (!snapshot.hasData || snapshot.data!.isEmpty) {
                               return Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Text(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
                                     'No FAQs available yet.',
                                     style: TextStyle(color: Colors.grey[600]),
-                                  ),
                                 ),
+                              ),
                               );
                             }
 
@@ -696,54 +799,55 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   itemCount: faqs.length,
                                   itemBuilder: (context, index) {
                                     final faq = faqs[index];
-                                    return Card(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      child: ExpansionTile(
-                                        title: Text(
-                                          faq.question,
-                                          style: const TextStyle(
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  child: ExpansionTile(
+                                    title: Text(
+                                      faq.question,
+                                      style: const TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 16,
-                                          ),
-                                        ),
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Text(
-                                              faq.answer,
+                                      ),
+                                    ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                                          faq.answer,
                                               style: TextStyle(
                                                 color: Colors.grey[800],
                                                 fontSize: 14,
                                               ),
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    );
-                                  },
-                                ),
+                                    ],
+                                  ),
+                            );
+                          },
+                            ),
                                 const SizedBox(height: 16),
                                 TextButton(
-                                  onPressed: () {
-                                    NavigationHelper.navigateToProfile(context);
-                                  },
+                                onPressed: () {
+                                    // Use navigateToTab to switch to the profile tab (index 3 for user)
+                                    NavigationHelper.navigateToTab(context, 3);
+                                },
                                   child: const Text('View more FAQs in Profile'),
                                   style: TextButton.styleFrom(
                                     foregroundColor: AppColors.primary,
-                                  ),
-                                ),
+                              ),
+                            ),
                               ],
                             );
                           },
-                        ),
+                          ),
                       ],
                     ),
                   ),
                 ],
-                              ),
-                            ),
-                          ),
-                      ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -993,199 +1097,19 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
   Widget _buildEventCard(BuildContext context, EventModel event) {
     return InkWell(
       onTap: () {
-        // Show popup dialog with event details
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          useRootNavigator: false, // This ensures the dialog stays within the current tab
-          builder: (BuildContext context) {
-            return WillPopScope( // This prevents the dialog from triggering navigation
-              onWillPop: () async => true,
-              child: Dialog(
-                insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Header with image
-                      if (event.imageUrl.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                          child: Stack(
-                            children: [
-                              Image.network(
-                                event.imageUrl,
-                                height: 200,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  height: 200,
-                                  color: Colors.grey[300],
-                                  child: Center(
-                                    child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600]),
-                                  ),
-                                ),
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Container(
-                                    height: 200,
-                                    color: Colors.grey[300],
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              // Gradient overlay
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.7),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Close button
-                              Positioned(
-                                top: 16,
-                                right: 16,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.white),
-                                    onPressed: () => Navigator.of(context, rootNavigator: false).pop(),
-                                  ),
-                                ),
-                              ),
-                              // Title overlay
-                              Positioned(
-                                bottom: 16,
-                                left: 16,
-                                right: 16,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      event.title,
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        shadows: [
-                                          Shadow(
-                                            offset: Offset(1, 1),
-                                            blurRadius: 3,
-                                            color: Colors.black45,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      // Content
-                      Flexible(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Description Section
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[50],
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.grey[200]!),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.description, color: AppColors.primary, size: 20),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Description',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      event.description,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        color: Colors.grey[800],
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (context) => NewsPage()));
       },
-      child: Container(
+              child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
-            ),
-          ],
+                        ),
+                      ],
         ),
         child: Stack(
           children: [
@@ -1269,7 +1193,7 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
                           offset: Offset(1, 1),
                           blurRadius: 3,
                           color: Colors.black45,
-                        ),
+                    ),
                       ],
                     ),
                     maxLines: 3,

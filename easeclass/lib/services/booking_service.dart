@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/booking_model.dart';
+import '../models/notification_model.dart';
 
 class BookingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,7 +10,98 @@ class BookingService {
   final String _ratingsCollection = 'ratings';
   final String _classesCollection = 'classes';
 
-  // Get all bookings for the current user
+  // Get all bookings for admin
+  Stream<List<BookingModel>> getAllBookings() {
+    return _firestore
+        .collection(_collection)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) async {
+          final bookings = await Future.wait(
+            snapshot.docs.map((doc) async {
+              final data = doc.data();
+              // Get class details
+              final classDoc = await _firestore.collection(_classesCollection).doc(data['roomId']).get();
+              final classData = classDoc.data() ?? {};
+              
+              // Get user details
+              Map<String, dynamic> userDetails = {};
+              if (data['userId'] != null) {
+                final userDoc = await _firestore.collection('users').doc(data['userId']).get();
+                if (userDoc.exists) {
+                  userDetails = userDoc.data() ?? {};
+                }
+              }
+
+              return BookingModel.fromMap({
+                'id': doc.id,
+                ...data,
+                'roomDetails': {
+                  'name': classData['name'] ?? 'Class ${data['roomId']}',
+                  'building': classData['building'] ?? '-',
+                  'floor': classData['floor']?.toString() ?? '-',
+                  'capacity': classData['capacity'] ?? 0,
+                  'features': classData['features'] ?? [],
+                },
+                'userDetails': {
+                   'name': userDetails['displayName'] ?? 'Anonymous',
+                   'email': userDetails['email'] ?? '-',
+                } // Include user details
+              });
+            }),
+          );
+          return bookings;
+        })
+        .asyncMap((future) => future);
+  }
+
+  // Get bookings by status for admin
+  Stream<List<BookingModel>> getBookingsByStatus(String status) {
+    return _firestore
+        .collection(_collection)
+        .where('status', isEqualTo: status)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) async {
+          final bookings = await Future.wait(
+            snapshot.docs.map((doc) async {
+              final data = doc.data();
+              // Get class details
+              final classDoc = await _firestore.collection(_classesCollection).doc(data['roomId']).get();
+              final classData = classDoc.data() ?? {};
+
+              // Get user details
+              Map<String, dynamic> userDetails = {};
+              if (data['userId'] != null) {
+                final userDoc = await _firestore.collection('users').doc(data['userId']).get();
+                if (userDoc.exists) {
+                  userDetails = userDoc.data() ?? {};
+                }
+              }
+              
+              return BookingModel.fromMap({
+                'id': doc.id,
+                ...data,
+                'roomDetails': {
+                  'name': classData['name'] ?? 'Class ${data['roomId']}',
+                  'building': classData['building'] ?? '-',
+                  'floor': classData['floor']?.toString() ?? '-',
+                  'capacity': classData['capacity'] ?? 0,
+                  'features': classData['features'] ?? [],
+                },
+                 'userDetails': {
+                   'name': userDetails['displayName'] ?? 'Anonymous',
+                   'email': userDetails['email'] ?? '-',
+                } // Include user details
+              });
+            }),
+          );
+          return bookings;
+        })
+        .asyncMap((future) => future);
+  }
+
+  // Get user bookings
   Stream<List<BookingModel>> getUserBookings() {
     final user = _auth.currentUser;
     if (user == null) {
@@ -19,18 +111,32 @@ class BookingService {
     return _firestore
         .collection(_collection)
         .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                final data = doc.data();
-                return BookingModel.fromMap({
-                  'id': doc.id,
-                  ...data,
-                });
-              })
-              .toList();
-        });
+        .map((snapshot) async {
+          final bookings = await Future.wait(
+            snapshot.docs.map((doc) async {
+              final data = doc.data();
+              // Get class details
+              final classDoc = await _firestore.collection(_classesCollection).doc(data['roomId']).get();
+              final classData = classDoc.data() ?? {};
+              
+              return BookingModel.fromMap({
+                'id': doc.id,
+                ...data,
+                'roomDetails': {
+                  'name': classData['name'] ?? 'Class ${data['roomId']}',
+                  'building': classData['building'] ?? '-',
+                  'floor': classData['floor']?.toString() ?? '-',
+                  'capacity': classData['capacity'] ?? 0,
+                  'features': classData['features'] ?? [],
+                },
+              });
+            }),
+          );
+          return bookings;
+        })
+        .asyncMap((future) => future);
   }
 
   // Get user bookings by status
@@ -44,37 +150,51 @@ class BookingService {
         .collection(_collection)
         .where('userId', isEqualTo: user.uid)
         .where('status', isEqualTo: status)
+        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                final data = doc.data();
-                return BookingModel.fromMap({
-                  'id': doc.id,
-                  ...data,
-                });
-              })
-              .toList();
-        });
+        .map((snapshot) async {
+          final bookings = await Future.wait(
+            snapshot.docs.map((doc) async {
+              final data = doc.data();
+              // Get class details
+              final classDoc = await _firestore.collection(_classesCollection).doc(data['roomId']).get();
+              final classData = classDoc.data() ?? {};
+              
+              return BookingModel.fromMap({
+                'id': doc.id,
+                ...data,
+                'roomDetails': {
+                  'name': classData['name'] ?? 'Class ${data['roomId']}',
+                  'building': classData['building'] ?? '-',
+                  'floor': classData['floor']?.toString() ?? '-',
+                  'capacity': classData['capacity'] ?? 0,
+                  'features': classData['features'] ?? [],
+                },
+              });
+            }),
+          );
+          return bookings;
+        })
+        .asyncMap((future) => future);
   }
 
-  // For admin: get all bookings by status
-  Stream<List<BookingModel>> getBookingsByStatus(String status) {
-    return _firestore
-        .collection(_collection)
-        .where('status', isEqualTo: status)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                final data = doc.data();
-                return BookingModel.fromMap({
-                  'id': doc.id,
-                  ...data,
-                });
-              })
-              .toList();
-        });
+  // Helper to create a notification
+  Future<void> _createNotification({
+    required String userId,
+    required String title,
+    required String body,
+    required String type,
+    required String bookingId,
+  }) async {
+    await _firestore.collection('notifications').add({
+      'userId': userId,
+      'title': title,
+      'body': body,
+      'type': type,
+      'bookingId': bookingId,
+      'createdAt': FieldValue.serverTimestamp(),
+      'isRead': false,
+    });
   }
 
   // Create a new booking
@@ -85,17 +205,22 @@ class BookingService {
     }
 
     final bookingData = booking.toMap();
-    // Ensure the booking has the current user ID
     bookingData['userId'] = user.uid;
-    // Set default status if not specified
     bookingData['status'] = bookingData['status'] ?? 'pending';
-    // Set creation time
     bookingData['createdAt'] = FieldValue.serverTimestamp();
-    
-    // Remove id field since Firestore will generate one
     bookingData.remove('id');
 
     final docRef = await _firestore.collection(_collection).add(bookingData);
+
+    // Create notification for pending booking
+    await _createNotification(
+      userId: user.uid,
+      title: 'Booking Submitted',
+      body: 'Your booking request for ${booking.roomDetails['name']} is pending approval.',
+      type: 'pending',
+      bookingId: docRef.id,
+    );
+
     return docRef.id;
   }
 
@@ -103,8 +228,32 @@ class BookingService {
   Future<void> updateBookingStatus(String bookingId, String status) async {
     await _firestore.collection(_collection).doc(bookingId).update({
       'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    // Fetch booking to get userId and room name
+    final doc = await _firestore.collection(_collection).doc(bookingId).get();
+    final data = doc.data();
+    if (data == null) return;
+    final userId = data['userId'] ?? '';
+    final roomName = data['roomDetails']?['name'] ?? 'the class';
+
+    if (status == 'approved') {
+      await _createNotification(
+        userId: userId,
+        title: 'Booking Approved',
+        body: 'Your booking for $roomName has been approved.',
+        type: 'approved',
+        bookingId: bookingId,
+      );
+    } else if (status == 'rejected') {
+      await _createNotification(
+        userId: userId,
+        title: 'Booking Rejected',
+        body: 'Your booking for $roomName has been rejected.',
+        type: 'rejected',
+        bookingId: bookingId,
+      );
+    }
   }
 
   // Admin approve booking with optional reason
@@ -114,6 +263,8 @@ class BookingService {
       'adminResponseReason': reason,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    // Ensure notification is created
+    await updateBookingStatus(bookingId, 'approved');
   }
 
   // Admin reject booking with reason
@@ -123,11 +274,18 @@ class BookingService {
       'adminResponseReason': reason,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    // Ensure notification is created
+    await updateBookingStatus(bookingId, 'rejected');
   }
 
   // Cancel booking
   Future<void> cancelBooking(String bookingId) async {
     await updateBookingStatus(bookingId, 'cancelled');
+  }
+
+  // Complete booking
+  Future<void> completeBooking(String bookingId) async {
+    await updateBookingStatus(bookingId, 'completed');
   }
 
   // Get a specific booking by ID
@@ -142,19 +300,30 @@ class BookingService {
       return null;
     }
 
+    // Get class details
+    final classDoc = await _firestore.collection(_classesCollection).doc(data['roomId']).get();
+    final classData = classDoc.data() ?? {};
+
     return BookingModel.fromMap({
       'id': doc.id,
       ...data,
+      'roomDetails': {
+        'name': classData['name'] ?? 'Class ${data['roomId']}',
+        'building': classData['building'] ?? '-',
+        'floor': classData['floor']?.toString() ?? '-',
+        'capacity': classData['capacity'] ?? 0,
+        'features': classData['features'] ?? [],
+      },
     });
   }
 
-  // Check if room is available at a specific time
-  Future<bool> isRoomAvailable(String roomId, DateTime date, String timeSlot) async {
+  // Check if class is available at a specific time
+  Future<bool> isClassAvailable(String classId, DateTime date, String timeSlot) async {
     final formattedDate = date.toIso8601String().split('T')[0]; // YYYY-MM-DD format
     
     final conflictingBookings = await _firestore
         .collection(_collection)
-        .where('roomId', isEqualTo: roomId)
+        .where('roomId', isEqualTo: classId)
         .where('date', isEqualTo: formattedDate)
         .where('timeSlot', isEqualTo: timeSlot)
         .where('status', whereIn: ['pending', 'approved'])
@@ -162,6 +331,40 @@ class BookingService {
         
     return conflictingBookings.docs.isEmpty;
   }
+
+  // Get all bookings for a specific class
+  Stream<List<BookingModel>> getClassBookings(String classId) {
+    return _firestore
+        .collection(_collection)
+        .where('roomId', isEqualTo: classId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) async {
+          final bookings = await Future.wait(
+            snapshot.docs.map((doc) async {
+              final data = doc.data();
+              // Get class details
+              final classDoc = await _firestore.collection(_classesCollection).doc(data['roomId']).get();
+              final classData = classDoc.data() ?? {};
+              
+              return BookingModel.fromMap({
+                'id': doc.id,
+                ...data,
+                'roomDetails': {
+                  'name': classData['name'] ?? 'Class ${data['roomId']}',
+                  'building': classData['building'] ?? '-',
+                  'floor': classData['floor']?.toString() ?? '-',
+                  'capacity': classData['capacity'] ?? 0,
+                  'features': classData['features'] ?? [],
+                },
+              });
+            }),
+          );
+          return bookings;
+        })
+        .asyncMap((future) => future);
+  }
+
   // Get all bookings for a specific room
   Stream<List<BookingModel>> getRoomBookings(String roomId) {
     return _firestore
@@ -350,22 +553,37 @@ class BookingService {
     }
   }
 
-  // Get all bookings for admin
-  Stream<List<BookingModel>> getAllBookings() {
-    return _firestore
-        .collection(_collection)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                final data = doc.data();
-                return BookingModel.fromMap({
-                  'id': doc.id,
-                  ...data,
-                });
-              })
-              .toList();
-        });
+  // New method to get bookings for a specific room and date
+  Future<List<BookingModel>> getBookingsForRoomAndDate(String roomId, String date) async {
+    try {
+      final QuerySnapshot snapshot = await _firestore
+          .collection(_collection)
+          .where('roomId', isEqualTo: roomId)
+          .where('date', isEqualTo: date)
+          .where('status', whereIn: ['pending', 'approved']) // Only consider pending and approved bookings
+          .orderBy('time') // Order by time to process sequentially
+          .get();
+
+      return snapshot.docs.map((doc) => BookingModel.fromFirestore(doc)).toList();
+    } catch (e) {
+      print('Error getting bookings for room $roomId on $date: $e');
+      return [];
+    }
+  }
+
+  // New method to get bookings for a specific room
+  Future<List<BookingModel>> getBookingsForRoom(String roomId) async {
+    try {
+      final QuerySnapshot snapshot = await _firestore
+          .collection(_collection)
+          .where('roomId', isEqualTo: roomId)
+          .orderBy('createdAt', descending: true) // Optional: order by creation date
+          .get();
+
+      return snapshot.docs.map((doc) => BookingModel.fromFirestore(doc)).toList();
+    } catch (e) {
+      print('Error getting bookings for room $roomId: $e');
+      return [];
+    }
   }
 }

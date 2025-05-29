@@ -6,7 +6,6 @@ import 'firebase_options.dart';
 import 'theme/app_colors.dart';
 import 'pages/user/home_page.dart';
 import 'pages/user/available_rooms_page.dart';
-import 'pages/user/room_detail_page.dart';
 import 'pages/user/user_bookings_page.dart'; // User's BookingsPage for user navigation
 import 'pages/user/progress_detail_page.dart';
 import 'pages/user/settings_page.dart';
@@ -17,6 +16,14 @@ import 'pages/admin/admin_main_page.dart';
 import 'pages/admin/manage_page.dart';
 import 'services/database_initializer.dart';
 import 'services/auth_service.dart';
+import 'pages/user/class_detail_page.dart';
+import 'models/class_model.dart';
+import 'pages/admin/class_management_page.dart';
+import 'pages/admin/user_management_page.dart';
+import 'pages/admin/content_management.dart';
+import 'pages/admin/user_management_help_page.dart';
+import 'pages/admin/class_management_help_page.dart';
+import 'pages/admin/content_management_help_page.dart';
 
 Future<void> initializeFirebase() async {
   try {
@@ -197,11 +204,21 @@ class MyApp extends StatelessWidget {
             final isAdmin = snapshot.data ?? false;
             return isAdmin ? const AdminMainPage() : const MainPage();
           },
-        ),        '/room-detail': (context) => const RoomDetailPage(),
+        ),        '/class-detail': (context) {
+          final classModel = ModalRoute.of(context)?.settings.arguments as ClassModel;
+          return ClassDetailPage(classModel: classModel);
+        },
         '/booking-confirmation': (context) => const BookingConfirmationPage(),
         '/progress-detail': (context) => const ProgressDetailPage(),
         '/rating': (context) => const RatingPage(),
         '/admin-dashboard': (context) => const AdminMainPage(),
+        '/user-bookings': (context) => const UserBookingsPage(),
+        '/admin-room-management': (context) => const ClassManagementPage(),
+        '/admin-user-management': (context) => const UserManagementPage(),
+        '/admin-content-management': (context) => const ContentManagementPage(),
+        '/admin-user-management-help': (context) => const UserManagementHelpPage(),
+        '/admin-class-management-help': (context) => const ClassManagementHelpPage(),
+        '/admin-content-management-help': (context) => const ContentManagementHelpPage(),
       },
     );
   }
@@ -390,7 +407,7 @@ class _MainPageState extends State<MainPage> {
         key: _navigatorKeys[index],
         onGenerateRoute: (settings) {
           // Check if this is a route that needs to be handled by a specific tab
-          if (settings.name == '/room-detail' ||
+          if (settings.name == '/class-detail' ||
               settings.name == '/booking-confirmation' ||
               settings.name == '/progress-detail' ||
               settings.name == '/rating') {
@@ -398,8 +415,9 @@ class _MainPageState extends State<MainPage> {
               builder: (context) {
                 // Route to the correct page based on the route name
                 switch (settings.name) {
-                  case '/room-detail':
-                    return const RoomDetailPage();
+                  case '/class-detail':
+                    final classModel = settings.arguments as ClassModel;
+                    return ClassDetailPage(classModel: classModel);
                   case '/booking-confirmation':
                     return const BookingConfirmationPage();
                   case '/progress-detail':
@@ -407,13 +425,13 @@ class _MainPageState extends State<MainPage> {
                   case '/rating':
                     return const RatingPage();
                   default:
-                  // This shouldn't happen, but just in case
                     return const HomePage();
                 }
               },
               settings: settings,
             );
-          } // Default page for each tab
+          }
+          // Default page for each tab
           return MaterialPageRoute(
             builder: (context) {
               // Check if the user is admin to determine the correct tab index mapping
@@ -466,3 +484,5 @@ class _MainPageState extends State<MainPage> {
     );
   }
 }
+
+// Placeholder Help Pages (These should be created as separate files)

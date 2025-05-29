@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
-import '../pages/admin/admin_main_page.dart';
+import '../pages/admin/admin_main_page.dart'; // Assuming AdminMainPage is the admin's main page
+import '../pages/user/available_rooms_page.dart';
+import '../pages/user/class_detail_page.dart';
 import '../models/class_model.dart';
+import '../pages/auth_page.dart';
+import '../pages/user/user_bookings_page.dart';
+import '../models/booking_model.dart'; // Import BookingModel
+import '../pages/user/user_booking_detail_page.dart'; // Import UserBookingDetailPage
 
 /// Helper class to handle navigation in the app with the nested navigation structure
 class NavigationHelper {
@@ -43,9 +49,12 @@ class NavigationHelper {
   }
   
   /// Navigate to home tab
-  static void navigateToHome(BuildContext context) {
-    navigateToTab(context, 0);
-  }  /// Navigate to available rooms tab
+  static void navigateToHome(BuildContext context, {bool isAdmin = false}) {
+    // Use pushReplacementNamed to prevent going back to login
+    Navigator.pushReplacementNamed(context, '/home');
+  }
+  
+  /// Navigate to available rooms tab
   static void navigateToAvailableRooms(BuildContext context, {Map<String, dynamic>? applyFilter}) {
     navigateToTab(context, 1);
     // If we have filters to apply, handle them after navigation
@@ -74,13 +83,12 @@ class NavigationHelper {
   }
   
   /// Navigate to bookings tab (for both user and admin)
-  static void navigateToBookings(BuildContext context) async {
-    // Get the AuthService to check if user is admin
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final isAdmin = await authService.isCurrentUserAdmin();
-    
-    // For users, bookings is tab 2, for admins it's tab 3
-    navigateToTab(context, isAdmin ? 3 : 2);
+  static void navigateToBookings(BuildContext context) {
+    // Use navigateToTab to switch to the bookings tab (index 2 for user, 3 for admin)
+    // We need to determine if the user is admin to select the correct tab index.
+    // A simpler approach for now is to assume user context or adjust based on the calling page.
+    // Let's navigate to tab 2 for users for now, which corresponds to the Bookings tab.
+    navigateToTab(context, 2); // Index 2 for user Bookings tab in MainPage
   }
   
   /// Navigate to settings/profile tab
@@ -125,10 +133,7 @@ class NavigationHelper {
   }
     /// Navigate to login page
   static void navigateToLogin(BuildContext context) {
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/login',
-      (route) => false,
-    );
+    Navigator.pushReplacementNamed(context, '/login');
   }
   
   /// Navigate to admin dashboard (admin users only)
@@ -141,12 +146,12 @@ class NavigationHelper {
 
   /// Navigate to class details page
   static void navigateToClassDetails(BuildContext context, ClassModel classModel) {
-    navigateTo(context, '/class-detail', arguments: classModel);
+    Navigator.pushNamed(context, '/class-detail', arguments: classModel);
   }
 
   /// Navigate to available classes page
   static void navigateToAvailableClasses(BuildContext context, {Map<String, dynamic>? applyFilter}) {
-    navigateToTab(context, 1); // Tab 1 is for available classes
+    navigateToTab(context, 1);
     if (applyFilter != null) {
       pendingClassFilters = applyFilter;
     }
@@ -160,5 +165,22 @@ class NavigationHelper {
     final filters = pendingClassFilters;
     pendingClassFilters = null;
     return filters;
+  }
+
+  // New method to navigate to user booking details
+  static void navigateToUserBookingDetails(BuildContext context, BookingModel booking) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserBookingDetailPage(
+          booking: booking,
+          onBookingUpdated: () { // Provide a callback for refresh if needed
+            // This callback can be used to trigger a refresh in the previous page
+            // For now, we can leave it empty or add a print statement
+            print('Booking updated from detail page');
+          },
+        ),
+      ),
+    );
   }
 }

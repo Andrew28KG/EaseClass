@@ -8,6 +8,9 @@ class UserModel {
   final String? photoUrl;
   final Timestamp createdAt;
   final Map<String, dynamic>? preferences;
+  final String? nim;
+  final String? department;
+  final String? password;
 
   UserModel({
     required this.id,
@@ -17,6 +20,9 @@ class UserModel {
     this.photoUrl,
     required this.createdAt,
     this.preferences,
+    this.nim,
+    this.department,
+    this.password,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -29,6 +35,9 @@ class UserModel {
       photoUrl: data['photoUrl'],
       createdAt: data['createdAt'] ?? Timestamp.now(),
       preferences: data['preferences'],
+      nim: data['nim'],
+      department: data['department'],
+      password: data['password'],
     );
   }
 
@@ -40,6 +49,9 @@ class UserModel {
       'photoUrl': photoUrl,
       'createdAt': createdAt,
       'preferences': preferences,
+      'nim': nim,
+      'department': department,
+      'password': password,
     };
   }
 
@@ -51,6 +63,9 @@ class UserModel {
     String? photoUrl,
     Timestamp? createdAt,
     Map<String, dynamic>? preferences,
+    String? nim,
+    String? department,
+    String? password,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -60,6 +75,9 @@ class UserModel {
       photoUrl: photoUrl ?? this.photoUrl,
       createdAt: createdAt ?? this.createdAt,
       preferences: preferences ?? this.preferences,
+      nim: nim ?? this.nim,
+      department: department ?? this.department,
+      password: password ?? this.password,
     );
   }
 } 

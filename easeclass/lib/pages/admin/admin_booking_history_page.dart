@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/booking_model.dart';
 import '../../theme/app_colors.dart';
 import 'booking_detail_page.dart';
+import '../../services/booking_service.dart';
 
 class AdminBookingHistoryPage extends StatefulWidget {
   const AdminBookingHistoryPage({Key? key}) : super(key: key);
@@ -21,11 +22,13 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
     'This Month',
   ];
 
+  final BookingService _bookingService = BookingService();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<List<BookingModel>>(
         stream: _getFilteredBookingsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -39,13 +42,16 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
           if (snapshot.hasError) {
             return Center(
               child: Text(
-                'Error loading bookings: \\${snapshot.error}',
+                'Error loading bookings: \${snapshot.error}',
                 style: const TextStyle(color: Colors.red),
               ),
             );
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          // Access the list of BookingModel directly from snapshot.data
+          final bookings = snapshot.data ?? [];
+
+          if (bookings.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -76,23 +82,6 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
               ),
             );
           }
-          final bookings = snapshot.data!.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return BookingModel(
-              id: doc.id,
-              roomId: data['roomId'] ?? '',
-              userId: data['userId'] ?? '',
-              date: data['date'] ?? '',
-              time: data['time'] ?? '',
-              status: data['status'] ?? '',
-              purpose: data['purpose'] ?? '',
-              createdAt: data['createdAt'] != null 
-                  ? data['createdAt'] as Timestamp
-                  : Timestamp.now(),
-              roomDetails: data['roomDetails'],
-              userDetails: data['userDetails'],
-            );
-          }).toList();
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -107,10 +96,23 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
     );
   }
 
-  Stream<QuerySnapshot> _getFilteredBookingsStream() {
-    Query query = FirebaseFirestore.instance
-        .collection('bookings')
-        .where('status', whereIn: ['completed', 'rejected']);
+  Stream<List<BookingModel>> _getFilteredBookingsStream() {
+    // Use BookingService to get all bookings with user details
+    Stream<List<BookingModel>> allBookingsStream = _bookingService.getAllBookings();
+
+    // Apply filters to the stream
+    return allBookingsStream.map((allBookings) {
+      // Filter by status
+      List<BookingModel> filteredByStatus = allBookings.where((booking) {
+        if (selectedFilter == 'All') {
+          return booking.status == 'completed' || booking.status == 'rejected';
+        } else if (selectedFilter == 'Completed') {
+          return booking.status == 'completed';
+        } else if (selectedFilter == 'Rejected') {
+          return booking.status == 'rejected';
+        }
+        return false; // Should not happen with defined filters
+      }).toList();
 
     // Apply date filters
     if (selectedFilter == 'This Week') {
@@ -118,25 +120,54 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
       final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
       final endOfWeek = startOfWeek.add(const Duration(days: 6, hours: 23, minutes: 59));
       
-      query = query
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfWeek))
-          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endOfWeek));
+        return filteredByStatus.where((booking) {
+          final bookingDate = booking.createdAt.toDate();
+          return bookingDate.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) &&
+                 bookingDate.isBefore(endOfWeek.add(const Duration(days: 1)));
+        }).toList();
+
     } else if (selectedFilter == 'This Month') {
       final now = DateTime.now();
       final startOfMonth = DateTime(now.year, now.month, 1);
       final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59);
       
-      query = query
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
-          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth));
-    } else if (selectedFilter == 'Completed') {
-      query = query.where('status', isEqualTo: 'completed');
-    } else if (selectedFilter == 'Rejected') {
-      query = query.where('status', isEqualTo: 'rejected');
-    }
+        return filteredByStatus.where((booking) {
+          final bookingDate = booking.createdAt.toDate();
+          return bookingDate.isAfter(startOfMonth.subtract(const Duration(seconds: 1))) &&
+                 bookingDate.isBefore(endOfMonth.add(const Duration(days: 1)));
+        }).toList();
 
-    return query.orderBy('createdAt', descending: true).snapshots();
+      } else {
+        // 'All', 'Completed', 'Rejected' filters without date constraints
+        return filteredByStatus;
+      }
+    });
   }
+
+  // Helper to format time with duration (copied from user booking detail page)
+  String _formatTimeWithDuration(String time, int duration) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    // Parse the time
+    final timeComponents = timeValue.split(':');
+    final hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    // Calculate end time
+    final startTime = DateTime(2024, 1, 1, hour, minute);
+    final endTime = startTime.add(Duration(hours: duration));
+    
+    // Format end time
+    final endHour = endTime.hour;
+    final endMinute = endTime.minute;
+    final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+    final formattedEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+    
+    return '$time - ${formattedEndHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')} $endPeriod';
+  }
+
   Widget _buildBookingCard(BookingModel booking) {
     Color statusColor;
     IconData statusIcon;
@@ -157,7 +188,7 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
 
     // Get room name and user name from details
     final roomName = booking.roomDetails?['name'] ?? 'Unknown Room';
-    final userName = booking.userDetails?['name'] ?? 'Unknown User';
+    final userName = booking.userDetails?['displayName'] ?? booking.userDetails?['name'] ?? 'Unknown User';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -229,17 +260,21 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
                   Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 8),
                   Text(
-                    booking.date,
+                    'Date: ${booking.date}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
                     ),
                   ),
-                  const SizedBox(width: 24),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
                   Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 8),
                   Text(
-                    booking.time,
+                    'Time: ${_formatTimeWithDuration(booking.time, booking.duration ?? 1)}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
@@ -261,6 +296,7 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
                         fontSize: 14,
                         color: Colors.grey[700],
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -288,22 +324,6 @@ class _AdminBookingHistoryPageState extends State<AdminBookingHistoryPage> {
                   ],
                 ),
               ],
-              
-              // Submission Date
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.schedule, size: 16, color: Colors.grey[500]),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Processed: ${_formatDate(booking.createdAt.toDate())}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),

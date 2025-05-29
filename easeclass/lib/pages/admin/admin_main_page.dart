@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_service.dart';
 // Admin pages
-import 'admin_dashboard.dart';
+import 'admin_dashboard_page.dart';
 import 'manage_page.dart'; // Now in admin folder
 import 'admin_bookings_page.dart'; // Use admin's BookingsPage with Progress tab
 import 'admin_settings_page.dart';
@@ -54,7 +54,7 @@ class _AdminMainPageState extends State<AdminMainPage> {  int _selectedIndex = 0
               _selectedIndex = index;
             });
           },          children: [
-            const AdminDashboard(showTabs: false), // Use AdminDashboard without duplicate tabs
+            AdminDashboardPage(),
             const ManagePage(),
             const AdminBookingsPage(), // Use admin's BookingsPage with Progress tab
             const AdminSettingsPage(),

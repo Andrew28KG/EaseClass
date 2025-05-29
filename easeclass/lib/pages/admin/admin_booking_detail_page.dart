@@ -30,22 +30,22 @@ class _AdminBookingDetailPageState extends State<AdminBookingDetailPage> {
   Future<void> _approveBooking() async {
     setState(() => _isLoading = true);
     try {
+      print('Attempting to approve booking: ${widget.booking.id}');
       await _bookingService.approveBooking(
         widget.booking.id,
         reason: _reasonController.text.trim(),
       );
+      print('Booking approved successfully in service');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Booking approved successfully')),
-        );
         widget.onBookingUpdated();
+
+        print('Attempting to pop after approval');
         Navigator.pop(context);
+        print('Navigator.pop called after approval');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error approving booking: $e')),
-        );
+        print('Error approving booking: ${e.toString()}');
       }
     } finally {
       if (mounted) {
@@ -63,21 +63,55 @@ class _AdminBookingDetailPageState extends State<AdminBookingDetailPage> {
       return;
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Booking'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Are you sure you want to reject this booking? Please provide a reason:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Enter rejection reason',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     setState(() => _isLoading = true);
     try {
+      print('Attempting to reject booking: ${widget.booking.id}');
       await _bookingService.rejectBooking(widget.booking.id, reason);
+      print('Booking rejected successfully in service');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Booking rejected successfully')),
-        );
         widget.onBookingUpdated();
+
+        print('Attempting to pop after rejection');
         Navigator.pop(context);
+        print('Navigator.pop called after rejection');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting booking: $e')),
-        );
+        print('Error rejecting booking: ${e.toString()}');
       }
     } finally {
       if (mounted) {
@@ -108,7 +142,7 @@ class _AdminBookingDetailPageState extends State<AdminBookingDetailPage> {
                   const SizedBox(height: 16),
                   _buildInfoCard('Booking Details', [
                     _buildInfoRow('Date', widget.booking.date),
-                    _buildInfoRow('Time', widget.booking.time),
+                    _buildInfoRow('Time', _formatTimeWithDuration(widget.booking.time, widget.booking.duration ?? 1)),
                     _buildInfoRow('Purpose', widget.booking.purpose),
                     _buildInfoRow('Status', widget.booking.status.toUpperCase()),
                     if (widget.booking.adminResponseReason != null)
@@ -201,5 +235,29 @@ class _AdminBookingDetailPageState extends State<AdminBookingDetailPage> {
         ],
       ),
     );
+  }
+
+  // Helper to format time with duration
+  String _formatTimeWithDuration(String time, int duration) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    // Parse the time
+    final timeComponents = timeValue.split(':');
+    final hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    // Calculate end time
+    final startTime = DateTime(2024, 1, 1, hour, minute);
+    final endTime = startTime.add(Duration(hours: duration));
+    
+    // Format end time
+    final endHour = endTime.hour;
+    final endMinute = endTime.minute;
+    final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+    final formattedEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+    
+    return '$time - ${formattedEndHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')} $endPeriod';
   }
 } 

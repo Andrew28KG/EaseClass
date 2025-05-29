@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/class_model.dart';
 import '../../services/firestore_service.dart';
+import '../../models/time_slot.dart';
 
 class EditClassPage extends StatefulWidget {
   final ClassModel classModel;
@@ -26,11 +27,21 @@ class _EditClassPageState extends State<EditClassPage> {
   
   bool _isLoading = false;
   List<String> _features = [];
+  List<TimeSlot> _timeSlots = [];
+  final List<String> _days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
 
   @override
   void initState() {
     super.initState();
     _initializeData();
+    _timeSlots = List<TimeSlot>.from(widget.classModel.timeSlots ?? []);
   }
 
   void _initializeData() {
@@ -58,7 +69,6 @@ class _EditClassPageState extends State<EditClassPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Create a map of updated data
       final updatedData = {
         'name': _nameController.text,
         'description': _descriptionController.text,
@@ -67,16 +77,14 @@ class _EditClassPageState extends State<EditClassPage> {
         'capacity': int.parse(_capacityController.text),
         'features': _features,
         'updatedAt': FieldValue.serverTimestamp(),
+        'timeSlots': _timeSlots.map((slot) => slot.toMap()).toList(),
       };
-
-      // Update the class using FirestoreService
       await _firestoreService.updateClass(widget.classModel.id, updatedData);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Class updated successfully')),
         );
-        Navigator.pop(context, true); // Return true to indicate successful update
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -138,6 +146,107 @@ class _EditClassPageState extends State<EditClassPage> {
   void _removeFeature(int index) {
     setState(() {
       _features.removeAt(index);
+    });
+  }
+
+  void _addTimeSlot(String day) async {
+    TimeOfDay? start;
+    TimeOfDay? end;
+    String? courseTitle;
+    final courseController = TextEditingController();
+    TimeSlot? newSlot;
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Add Time Slot for $day'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: courseController,
+                  decoration: const InputDecoration(
+                    labelText: 'Course/Study Title',
+                    hintText: 'e.g., Math 101',
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      courseTitle = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: start ?? TimeOfDay(hour: 8, minute: 0),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            start = picked;
+                          });
+                        }
+                      },
+                      child: Text(start == null ? 'Start' : start!.format(context)),
+                    ),
+                    const Text('to'),
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: end ?? TimeOfDay(hour: 10, minute: 0),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            end = picked;
+                          });
+                        }
+                      },
+                      child: Text(end == null ? 'End' : end!.format(context)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: (start != null && end != null && (courseTitle?.isNotEmpty ?? false))
+                    ? () {
+                        newSlot = TimeSlot(
+                          day: day,
+                          startTime: start!.format(context),
+                          endTime: end!.format(context),
+                          courseEvent: courseTitle,
+                        );
+                        Navigator.pop(context);
+                      }
+                    : null,
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (newSlot != null) {
+      setState(() {
+        _timeSlots.add(newSlot!);
+      });
+    }
+  }
+
+  void _removeTimeSlot(int index) {
+    setState(() {
+      _timeSlots.removeAt(index);
     });
   }
 
@@ -259,6 +368,55 @@ class _EditClassPageState extends State<EditClassPage> {
                       }).toList(),
                     ),
                     const SizedBox(height: 24),
+
+                    const Text(
+                      'Class Study Schedule (Unavailable for Booking)',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    ..._days.map((day) {
+                      final slots = _timeSlots
+                          .asMap()
+                          .entries
+                          .where((entry) => entry.value.day == day)
+                          .toList();
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  TextButton.icon(
+                                    onPressed: () => _addTimeSlot(day),
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add Time Slot'),
+                                  ),
+                                ],
+                              ),
+                              if (slots.isEmpty)
+                                const Text('No time slots'),
+                              ...slots.map((entry) {
+                                final i = entry.key;
+                                final slot = entry.value;
+                                return ListTile(
+                                  title: Text(slot.courseEvent ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text('${slot.startTime} - ${slot.endTime}'),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () => _removeTimeSlot(i),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),

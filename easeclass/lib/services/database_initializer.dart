@@ -10,92 +10,36 @@ class DatabaseInitializer {
     await _createFaqs();
     await _createEvents(); // Add events initialization
     await _ensureAdminUser();
-    // Only create sample bookings and ratings if a user exists
-    if (_auth.currentUser != null) {
-      await _createSampleBookings();
-      await _createSampleRatings();
-    }
+    // Removed sample data creation as per user request
+    // if (_auth.currentUser != null) {
+    //   await _createSampleBookings();
+    //   await _createSampleRatings();
+    // }
   }
   
   // Public method to manually create sample bookings for admin testing
   Future<void> createSampleBookingsForAdmin() async {
-    if (_auth.currentUser != null) {
-      // Force create new sample bookings regardless of existing ones
-      await _createSampleBookingsForced();
-    }
+    // Removed sample booking creation as per user request
+    // if (_auth.currentUser != null) {
+    //   // Force create new sample bookings regardless of existing ones
+    //   await _createSampleBookingsForced();
+    // } else {
+    //   print('No user logged in, cannot create sample bookings for admin');
+    // }
+     print('Sample booking creation for admin is disabled.'); // Add a log indicating it's disabled
   }
   
   // Create sample bookings ignoring existing ones - for admin testing
-  Future<void> _createSampleBookingsForced() async {
-    final CollectionReference bookingsCollection = _firestore.collection('bookings');
-    final User? currentUser = _auth.currentUser;
-    
-    if (currentUser == null) {
-      print('No user signed in, skipping sample bookings');
-      return;
-    }
-    
-    // Get room IDs to reference in bookings
-    final QuerySnapshot roomSnapshot = await _firestore.collection('rooms').limit(5).get();
-    if (roomSnapshot.docs.isEmpty) {
-      print('No rooms available for creating sample bookings');
-      return;
-    }
-    
-    List<String> roomIds = roomSnapshot.docs.map((doc) => doc.id).toList();
-    
-    // Create dates for bookings
-    final DateTime now = DateTime.now();
-    final String today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    
-    // Sample booking data focused on pending items for admin testing
-    final List<Map<String, dynamic>> bookingsData = [
-      // Today's date (current date) - pending bookings for admin approval
-      {
-        'roomId': roomIds[0],
-        'userId': 'sample_user_1',
-        'date': today,
-        'time': '09:00 - 11:00',
-        'purpose': 'Math Department Meeting',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(hours: 2))),
-      },
-      {
-        'roomId': roomIds[1],
-        'userId': 'sample_user_2',
-        'date': today,
-        'time': '13:00 - 15:00',
-        'purpose': 'Science Club Session',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 30))),
-      },
-      {
-        'roomId': roomIds[2],
-        'userId': 'sample_user_3', 
-        'date': today,
-        'time': '15:30 - 17:30',
-        'purpose': 'Faculty Interview',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 15))),
-      },
-      {
-        'roomId': roomIds[3],
-        'userId': 'sample_user_4',
-        'date': today,
-        'time': '18:00 - 20:00',
-        'purpose': 'Engineering Project Review',
-        'status': 'pending',
-        'createdAt': Timestamp.now(),
-      },
-    ];
-    
-    // Add each booking to the collection
-    for (var bookingData in bookingsData) {
-      await bookingsCollection.add(bookingData);
-    }
-    
-    print('Additional sample bookings created with ${bookingsData.length} pending documents for admin testing');
-  }
+  // Removed as per user request
+  // Future<void> _createSampleBookingsForced() async {
+  // ... (rest of the _createSampleBookingsForced method commented out or removed)
+  // }
+
+  // Removed sample booking data generation helper
+  // List<Map<String, dynamic>> _generateSampleBookingsData({required String today, required List<String> roomIds, required User currentUser}) {
+  // ... (rest of the _generateSampleBookingsData method commented out or removed)
+  // }
+
   // List of admin emails - keep in sync with AuthService
   final List<String> _adminEmails = [
     'admin@easeclass.com',
@@ -481,282 +425,14 @@ class DatabaseInitializer {
   }
 
   // Create sample bookings (only if a user exists)
-  Future<void> _createSampleBookings() async {
-    final CollectionReference bookingsCollection = _firestore.collection('bookings');
-    final User? currentUser = _auth.currentUser;
-    
-    if (currentUser == null) {
-      print('No user signed in, skipping sample bookings');
-      return;
-    }
-    
-    // Check if bookings already exist for this user
-    final QuerySnapshot existingBookings = await bookingsCollection
-        .where('userId', isEqualTo: currentUser.uid)
-        .limit(1)
-        .get();
-        
-    if (existingBookings.docs.isNotEmpty) {
-      print('Bookings already exist for current user');
-      return;
-    }
-    
-    // Get room IDs to reference in bookings
-    final QuerySnapshot roomSnapshot = await _firestore.collection('rooms').limit(5).get();
-    if (roomSnapshot.docs.isEmpty) {
-      print('No rooms available for creating sample bookings');
-      return;
-    }
-    
-    List<String> roomIds = roomSnapshot.docs.map((doc) => doc.id).toList();
-    
-    // Create dates for bookings
-    final DateTime now = DateTime.now();
-    final String today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    
-    final DateTime yesterday = now.subtract(const Duration(days: 1));
-    final String yesterdayStr = '${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}';
-    
-    final DateTime lastWeek = now.subtract(const Duration(days: 7));
-    final String lastWeekStr = '${lastWeek.year}-${lastWeek.month.toString().padLeft(2, '0')}-${lastWeek.day.toString().padLeft(2, '0')}';
-    
-    final DateTime nextWeek = now.add(const Duration(days: 7));
-    final String nextWeekStr = '${nextWeek.year}-${nextWeek.month.toString().padLeft(2, '0')}-${nextWeek.day.toString().padLeft(2, '0')}';
-    
-    final DateTime tomorrow = now.add(const Duration(days: 1));
-    final String tomorrowStr = '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';    final List<Map<String, dynamic>> bookingsData = [
-      // Current user's bookings
-      {
-        'roomId': roomIds[0],
-        'userId': currentUser.uid,
-        'date': lastWeekStr,
-        'time': '10:00 - 12:00',
-        'purpose': 'Study Group Meeting',
-        'status': 'completed',
-        'createdAt': Timestamp.fromDate(lastWeek),
-        'rating': 4.5,
-        'feedback': 'Room was clean and well-equipped.'
-      },
-      {
-        'roomId': roomIds[1],
-        'userId': currentUser.uid,
-        'date': yesterdayStr,
-        'time': '14:00 - 16:00',
-        'purpose': 'Team Project Discussion',
-        'status': 'completed',
-        'createdAt': Timestamp.fromDate(yesterday.subtract(const Duration(days: 2))),
-        'rating': 4.0,
-        'feedback': 'Projector was a bit dim, but overall good experience.'
-      },
-      {
-        'roomId': roomIds[2],
-        'userId': currentUser.uid,
-        'date': today,
-        'time': '16:00 - 18:00',
-        'purpose': 'Research Meeting',
-        'status': 'approved',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(days: 3))),
-      },
-      {
-        'roomId': roomIds[3],
-        'userId': currentUser.uid,
-        'date': tomorrowStr,
-        'time': '09:00 - 11:00',
-        'purpose': 'Exam Preparation',
-        'status': 'approved',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(days: 1))),
-      },
-      {
-        'roomId': roomIds[4],
-        'userId': currentUser.uid,
-        'date': nextWeekStr,
-        'time': '13:00 - 15:00',
-        'purpose': 'Group Presentation Practice',
-        'status': 'pending',
-        'createdAt': Timestamp.now(),
-      },
-      
-      // Sample bookings for other users (for admin view)
-      {
-        'roomId': roomIds[0],
-        'userId': 'sample_user_1',
-        'date': today,
-        'time': '08:00 - 10:00',
-        'purpose': 'Morning Lecture',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(hours: 2))),
-      },
-      {
-        'roomId': roomIds[1],
-        'userId': 'sample_user_2',
-        'date': today,
-        'time': '11:00 - 13:00',
-        'purpose': 'Workshop Session',
-        'status': 'approved',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(hours: 4))),
-      },
-      {
-        'roomId': roomIds[2],
-        'userId': 'sample_user_3',
-        'date': tomorrowStr,
-        'time': '14:00 - 16:00',
-        'purpose': 'Student Meeting',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(hours: 1))),
-      },
-      {
-        'roomId': roomIds[3],
-        'userId': 'sample_user_1',
-        'date': yesterdayStr,
-        'time': '10:00 - 12:00',
-        'purpose': 'Faculty Meeting',
-        'status': 'completed',
-        'createdAt': Timestamp.fromDate(yesterday.subtract(const Duration(days: 1))),
-        'rating': 5.0,
-        'feedback': 'Excellent facilities and clean environment.'
-      },
-      {
-        'roomId': roomIds[4],
-        'userId': 'sample_user_2',
-        'date': lastWeekStr,
-        'time': '15:00 - 17:00',
-        'purpose': 'Training Session',
-        'status': 'completed',
-        'createdAt': Timestamp.fromDate(lastWeek.subtract(const Duration(days: 1))),
-        'rating': 3.5,
-        'feedback': 'Room was okay, but could use better lighting.'
-      },
-      {
-        'roomId': roomIds[0],
-        'userId': 'sample_user_3',
-        'date': nextWeekStr,
-        'time': '10:00 - 12:00',
-        'purpose': 'Conference Call',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 30))),
-      },
-      {
-        'roomId': roomIds[1],
-        'userId': 'sample_user_1',
-        'date': '2025-05-20',
-        'time': '13:00 - 15:00',
-        'purpose': 'Cancelled Meeting',
-        'status': 'cancelled',
-        'createdAt': Timestamp.fromDate(DateTime(2025, 5, 18)),
-      },      {
-        'roomId': roomIds[2],
-        'userId': 'sample_user_2',
-        'date': '2025-05-21',
-        'time': '16:00 - 18:00',
-        'purpose': 'Rejected Request',
-        'status': 'rejected',
-        'createdAt': Timestamp.fromDate(DateTime(2025, 5, 19)),
-      },
-      // Additional pending bookings for admin testing - today's date (May 25, 2025)
-      {
-        'roomId': roomIds[0],
-        'userId': 'sample_user_4',
-        'date': '2025-05-25',
-        'time': '09:00 - 11:00',
-        'purpose': 'Research Presentation',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(hours: 3))),
-      },
-      {
-        'roomId': roomIds[1],
-        'userId': 'sample_user_5',
-        'date': '2025-05-25',
-        'time': '13:00 - 15:00',
-        'purpose': 'Department Meeting',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 45))),
-      },
-      {
-        'roomId': roomIds[3],
-        'userId': 'sample_user_6',
-        'date': '2025-05-25',
-        'time': '15:30 - 17:30',
-        'purpose': 'Study Group Session',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 20))),
-      },
-      {
-        'roomId': roomIds[4],
-        'userId': 'sample_user_7',
-        'date': '2025-05-25',
-        'time': '18:00 - 20:00',
-        'purpose': 'Evening Workshop',
-        'status': 'pending',
-        'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 10))),
-      },
-    ];
-    
-    // Add each booking to the collection
-    for (var bookingData in bookingsData) {
-      await bookingsCollection.add(bookingData);
-    }
-    
-    print('Sample bookings initialized with ${bookingsData.length} documents');
-  }
+  // Removed as per user request
+  // Future<void> _createSampleBookings() async {
+  // ... (rest of the _createSampleBookings method commented out or removed)
+  // }
 
   // Create sample ratings
-  Future<void> _createSampleRatings() async {
-    final CollectionReference ratingsCollection = _firestore.collection('ratings');
-    final User? currentUser = _auth.currentUser;
-    
-    if (currentUser == null) {
-      print('No user signed in, skipping sample ratings');
-      return;
-    }
-    
-    // Check if ratings already exist for this user
-    final QuerySnapshot existingRatings = await ratingsCollection
-        .where('userId', isEqualTo: currentUser.uid)
-        .limit(1)
-        .get();
-        
-    if (existingRatings.docs.isNotEmpty) {
-      print('Ratings already exist for current user');
-      return;
-    }
-    
-    // Get room IDs and booking IDs to reference in ratings
-    final QuerySnapshot roomSnapshot = await _firestore.collection('rooms').limit(5).get();
-    final QuerySnapshot bookingSnapshot = await _firestore.collection('bookings')
-        .where('userId', isEqualTo: currentUser.uid)
-        .where('status', isEqualTo: 'completed')
-        .get();
-        
-    if (roomSnapshot.docs.isEmpty || bookingSnapshot.docs.isEmpty) {
-      print('No rooms or completed bookings available for creating sample ratings');
-      return;
-    }
-    
-    List<String> roomIds = roomSnapshot.docs.map((doc) => doc.id).toList();
-    List<String> bookingIds = bookingSnapshot.docs.map((doc) => doc.id).toList();
-    
-    // Create some sample ratings
-    final List<Map<String, dynamic>> ratingsData = [];
-    
-    // Only add as many ratings as we have completed bookings
-    final int ratingsCount = bookingIds.length;
-    
-    for (int i = 0; i < ratingsCount; i++) {
-      ratingsData.add({
-        'bookingId': bookingIds[i],
-        'roomId': roomIds[i % roomIds.length],
-        'userId': currentUser.uid,
-        'rating': 4.0 + (i % 2) * 0.5, // Alternating between 4.0 and 4.5
-        'comment': 'Good experience overall. ${i % 2 == 0 ? 'The room was clean and well-equipped.' : 'The facilities worked great.'}',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    
-    // Add each rating to the collection
-    for (var ratingData in ratingsData) {
-      await ratingsCollection.add(ratingData);
-    }
-    
-    print('Sample ratings initialized with ${ratingsData.length} documents');
-  }
+  // Removed as per user request
+  // Future<void> _createSampleRatings() async {
+  // ... (rest of the _createSampleRatings method commented out or removed)
+  // }
 }

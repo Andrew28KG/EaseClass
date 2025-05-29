@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/user_model.dart';
 import '../../models/booking_model.dart';
 
@@ -43,24 +44,31 @@ class _UserManagementPageState extends State<UserManagementPage> {
           return UserModel.fromFirestore(doc);
         }).toList();
         
-        // Filter to only show students and teachers (exclude admins)
+        // Filter to show students (role: 'user') and teachers, exclude admins
         final filteredUsers = allUsers.where((user) => 
-          user.role == 'student' || user.role == 'teacher'
+          user.role == 'user' || user.role == 'teacher'
         ).toList();
-          // Calculate statistics (only for students and teachers)
-        _studentCount = filteredUsers.where((user) => user.role == 'student').length;
+
+        // Calculate statistics
+        _studentCount = filteredUsers.where((user) => user.role == 'user').length;
         _teacherCount = filteredUsers.where((user) => user.role == 'teacher').length;
-        _totalUsers = filteredUsers.length; // Total only includes students and teachers
+        _totalUsers = filteredUsers.length;
         
         setState(() {
-          _users = filteredUsers;
+          _users = allUsers;
           _filteredUsers = filteredUsers;
           _isLoading = false;
+        });
+
+        // Debug print to check users
+        print('Total users loaded: ${allUsers.length}');
+        print('Filtered users: ${filteredUsers.length}');
+        allUsers.forEach((user) {
+          print('User: ${user.email}, Role: ${user.role}');
         });
       }
     } catch (e) {
       print('Error loading users: $e');
-      // Populate with dummy data
       _populateDummyData();
       setState(() => _isLoading = false);
     }
@@ -118,6 +126,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return WillPopScope(
       onWillPop: () async => false, // Prevent back button navigation
       child: Scaffold(
+        // Removed the AppBar as it's handled by the main admin page layout
+        // appBar: AppBar(
+        //   title: const Text('User Management'),
+        //   actions: [
+        //     IconButton(
+        //       icon: const Icon(Icons.add),
+        //       onPressed: _showAddUserDialog,
+        //       tooltip: 'Add User',
+        //     ),
+        //   ],
+        // ),
         body: Column(
           children: [
             _buildSearchBar(),
@@ -130,6 +149,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   : _buildUsersList(),
             ),
           ],
+        ),
+        // Add the floating action button for Add User
+        floatingActionButton: FloatingActionButton(
+          onPressed: _showAddUserDialog,
+          tooltip: 'Add User',
+          child: const Icon(Icons.add),
         ),
       ),
     );
@@ -281,25 +306,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 : _getIconForRole(user.role),
             ),
             title: Text(user.displayName ?? user.email.split('@').first),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(user.email),
-                Text(
-                  'Role: ${_capitalizeFirst(user.role)} | Joined: ${_formatDate(user.createdAt.toDate())}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
+            subtitle: Text('Role: ${_capitalizeFirst(user.role)}'),
             trailing: IconButton(
-              icon: const Icon(Icons.history, color: Colors.blue),
-              tooltip: 'View Booking History',
-              onPressed: () => _showBookingHistory(user),
+              icon: const Icon(Icons.delete, color: Colors.red),
+              tooltip: 'Delete User',
+              onPressed: () => _confirmDeleteUser(user),
             ),
-            isThreeLine: true,
+            isThreeLine: false,
             onTap: () => _showUserDetails(user),
           ),
         );
@@ -642,93 +655,154 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
   void _showUserDetails(UserModel user) {
+    bool _isPasswordVisible = false;
+
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
         child: Container(
           width: MediaQuery.of(context).size.width * 0.8,
+                height: MediaQuery.of(context).size.height * 0.8,
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: _getColorForRole(user.role),
-                    child: user.photoUrl != null
-                      ? ClipOval(
-                          child: Image.network(
-                            user.photoUrl!,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return _getIconForRole(user.role);
-                            },
+                        Expanded(
+                          child: Text(
+                            user.displayName ?? 'User Details',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        )
-                      : _getIconForRole(user.role),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
                   ),
-                  const SizedBox(width: 16),
+                    const Divider(height: 24),
                   Expanded(
+                      child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          user.displayName ?? 'No Name',
-                          style: const TextStyle(
-                            fontSize: 20,
+                            _detailRow('Full Name', user.displayName ?? 'N/A'),
+                            _detailRow('NIM', user.nim ?? 'N/A'),
+                            _detailRow('Email', user.email),
+                            _detailRow('Department', user.department ?? 'N/A'),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 100,
+                                    child: Text(
+                                      'Password',
+                                      style: TextStyle(
                             fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _getColorForRole(user.role),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            _capitalizeFirst(user.role),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                                  ),
+                                  Expanded(
+                                    child: TextField(
+                                      readOnly: true,
+                                      obscureText: !_isPasswordVisible,
+                                      controller: TextEditingController(
+                                        text: user.password ?? 'password123',
+                                      ),
+                                      decoration: InputDecoration(
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                            color: Colors.grey,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _isPasswordVisible = !_isPasswordVisible;
+                                            });
+                                          },
+                                        ),
+                                        suffixIconConstraints: const BoxConstraints(
+                                            minWidth: 24, minHeight: 24),
                             ),
-                          ),
+                                      style: const TextStyle(
+                                        fontSize: 15,
                         ),
-                      ],
                     ),
                   ),
                 ],
+                              ),
               ),
               const SizedBox(height: 24),
-              _detailRow('Email', user.email),
-              _detailRow('ID', user.id),
-              _detailRow('Created', _formatDate(user.createdAt.toDate())),
-              if (user.preferences != null && user.preferences!.isNotEmpty)
-                _detailRow('Preferences', user.preferences.toString()),              const SizedBox(height: 24),
               const Text(
-                'Quick Actions',
+                              'Recent Bookings',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.history),
-                  label: const Text('View Booking History'),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _showBookingHistory(user);
+                            FutureBuilder<List<BookingModel>>(
+                              future: _getUserBookings(user.id),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const Center(child: CircularProgressIndicator());
+                                }
+
+                                if (snapshot.hasError) {
+                                  return Center(
+                                    child: Text(
+                                      'Error loading bookings: ${snapshot.error}',
+                                      style: TextStyle(color: Colors.red.shade700),
+                                    ),
+                                  );
+                                }
+
+                                final bookings = snapshot.data ?? [];
+
+                                if (bookings.isEmpty) {
+                                  return Center(
+                                    child: Text(
+                                      'No booking history found.',
+                                      style: TextStyle(color: Colors.grey.shade600),
+                                    ),
+                                  );
+                                }
+
+                                final displayBookings = bookings.take(5).toList();
+
+                                return ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  itemCount: displayBookings.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final booking = displayBookings[index];
+                                    return _buildBookingCard(booking);
                   },
+                                );
+                  },
+                ),
+                          ],
+                        ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -740,9 +814,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 ),
               ),
             ],
-          ),
         ),
       ),
+            );
+          },
+        );
+      },
     );
   }
   
@@ -768,6 +845,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               style: const TextStyle(
                 fontSize: 15,
               ),
+              softWrap: true,
             ),
           ),
         ],
@@ -779,4 +857,238 @@ class _UserManagementPageState extends State<UserManagementPage> {
   // Edit user dialog removed - no longer supporting user editing from admin interface
   
   // Delete user dialog removed - no longer supporting user deletion from admin interface
+
+  Future<void> _showAddUserDialog() async {
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController nimController = TextEditingController();
+    final TextEditingController passwordController = TextEditingController(text: 'password123');
+    String selectedRole = 'student';
+    String selectedDepartment = 'Computer Science';
+    bool _isPasswordVisible = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Add New User'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    hintText: 'Enter user email',
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    hintText: 'Enter full name',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nimController,
+                  decoration: const InputDecoration(
+                    labelText: 'NIM',
+                    hintText: 'Enter NIM',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  decoration: InputDecoration(
+                    labelText: 'Default Password',
+                    hintText: 'Enter default password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordVisible = !_isPasswordVisible;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: !_isPasswordVisible,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Role',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'student', child: Text('Student')),
+                    DropdownMenuItem(value: 'teacher', child: Text('Teacher')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      selectedRole = value;
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedDepartment,
+                  decoration: const InputDecoration(
+                    labelText: 'Department',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Computer Science', child: Text('Computer Science')),
+                    DropdownMenuItem(value: 'Information Systems', child: Text('Information Systems')),
+                    DropdownMenuItem(value: 'Information Technology', child: Text('Information Technology')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      selectedDepartment = value;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (emailController.text.isEmpty || 
+                    nameController.text.isEmpty || 
+                    nimController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill all fields')),
+                  );
+                  return;
+                }
+
+                try {
+                  // First, create the user in Firebase Authentication
+                  final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                    email: emailController.text,
+                    password: passwordController.text,
+                  );
+
+                  // Then create the user document in Firestore
+                  await _firestore.collection('users').doc(userCredential.user!.uid).set({
+                    'email': emailController.text,
+                    'displayName': nameController.text,
+                    'nim': nimController.text,
+                    'role': selectedRole,
+                    'department': selectedDepartment,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'isAdmin': false,
+                    'password': passwordController.text,
+                  });
+
+                  // Sign out to stay in admin interface
+                  await FirebaseAuth.instance.signOut();
+
+                  // Reload users list
+                  await _loadUsers();
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('User added successfully')),
+                    );
+                  }
+                } on FirebaseAuthException catch (e) {
+                  String errorMessage;
+                  if (e.code == 'weak-password') {
+                    errorMessage = 'The password provided is too weak.';
+                  } else if (e.code == 'email-already-in-use') {
+                    errorMessage = 'An account already exists for that email.';
+                  } else {
+                    errorMessage = 'An error occurred: ${e.message}';
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(errorMessage)),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error adding user: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Add User'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Method to confirm user deletion
+  void _confirmDeleteUser(UserModel user) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: Text('Are you sure you want to delete user ${user.displayName ?? user.email}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), // Dismiss dialog
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Dismiss dialog
+              _deleteUser(user.id); // Proceed with deletion
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red, // Red button for deletion
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Method to delete a user from Firestore
+  void _deleteUser(String userId) async {
+    try {
+      // First get the user's email from Firestore
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data();
+      final userEmail = userData?['email'];
+
+      if (userEmail != null) {
+        // Delete from Firestore
+        await _firestore.collection('users').doc(userId).delete();
+
+        // After deletion, refresh the user list
+        _loadUsers();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User deleted successfully. Note: User may still be able to log in until their authentication account is deleted by an administrator.')),
+          );
+        }
+      } else {
+        throw Exception('User email not found');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting user: $e')),
+        );
+      }
+    }
+  }
 }

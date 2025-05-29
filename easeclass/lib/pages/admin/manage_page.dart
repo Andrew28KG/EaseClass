@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'user_management_new.dart'; // Using the fixed user management page
-import 'class_management_simplified.dart'; // Using the simplified class management page
+import 'user_management_page.dart'; // Corrected filename
+import 'class_management_page.dart'; // Corrected filename
 import 'content_management.dart'; // Import fixed ContentManagementPage
 
 class ManagePage extends StatefulWidget {

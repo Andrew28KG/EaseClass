@@ -6,14 +6,14 @@ import '../../theme/app_colors.dart';
 import 'user_booking_detail_page.dart';
 import 'user_booking_history_page.dart';
 
-class UserBookedRoomsPage extends StatefulWidget {
-  const UserBookedRoomsPage({Key? key}) : super(key: key);
+class UserBookedClassesPage extends StatefulWidget {
+  const UserBookedClassesPage({Key? key}) : super(key: key);
 
   @override
-  State<UserBookedRoomsPage> createState() => _UserBookedRoomsPageState();
+  State<UserBookedClassesPage> createState() => _UserBookedClassesPageState();
 }
 
-class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTickerProviderStateMixin {
+class _UserBookedClassesPageState extends State<UserBookedClassesPage> with SingleTickerProviderStateMixin {
   final BookingService _bookingService = BookingService();
   late TabController _tabController;
   bool _isLoading = true;
@@ -59,7 +59,7 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
               .map((booking) => {
             'id': booking.id,
             'roomId': booking.roomId,
-            'roomName': booking.roomDetails?['name'] ?? 'Room ${booking.roomId}',
+            'roomName': booking.roomDetails?['name'] ?? 'Class ${booking.roomId}',
             'building': booking.roomDetails?['building'] ?? '-',
             'floor': booking.roomDetails?['floor']?.toString() ?? '-',
             'capacity': booking.roomDetails?['capacity'] ?? 0,
@@ -185,7 +185,7 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      Icons.meeting_room,
+                      Icons.class_,
                       color: AppColors.primary,
                       size: 24,
                     ),
@@ -196,7 +196,7 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          booking['roomName'] ?? 'Unknown Room',
+                          booking['roomName'] ?? 'Unknown Class',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -222,14 +222,14 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
               ),
               const SizedBox(height: 16),
               if ((booking['date'] ?? '').isNotEmpty && (booking['time'] ?? '').isNotEmpty) ...[
-              _buildInfoRow(Icons.calendar_today, '${booking['date']} | ${booking['time']}'),
-              const SizedBox(height: 8),
+                _buildInfoRow(Icons.calendar_today, '${booking['date']} | ${booking['time']}'),
+                const SizedBox(height: 8),
               ],
               if ((booking['purpose'] ?? '').isNotEmpty) ...[
-              _buildInfoRow(Icons.description, booking['purpose'] ?? 'No purpose specified'),
-              const SizedBox(height: 12),
+                _buildInfoRow(Icons.description, booking['purpose'] ?? 'No purpose specified'),
+                const SizedBox(height: 12),
               ] else ...[
-                 const SizedBox(height: 8),
+                const SizedBox(height: 8),
               ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -338,7 +338,9 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
       time: bookingData['time'] ?? '',
       purpose: bookingData['purpose'] ?? '',
       status: bookingData['status'] ?? 'pending',
-      createdAt: Timestamp.fromDate(bookingData['createdAt'] ?? DateTime.now()),
+      createdAt: bookingData['createdAt'] is DateTime 
+          ? Timestamp.fromDate(bookingData['createdAt'] as DateTime)
+          : Timestamp.now(),
       roomDetails: {
         'name': bookingData['roomName'],
         'building': bookingData['building'],
@@ -365,43 +367,84 @@ class _UserBookedRoomsPageState extends State<UserBookedRoomsPage> with SingleTi
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMainContent(),
-          UserBookingHistoryPage(),
-        ],
+      backgroundColor: Colors.white,
+      body: RefreshIndicator(
+        onRefresh: _loadBookings,
+        child: Column(
+          children: [
+            // Filter dropdown
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: DropdownButtonFormField<String>(
+                value: _selectedFilter,
+                decoration: InputDecoration(
+                  labelText: 'Filter by Status',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+                items: _filterOptions.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedFilter = newValue;
+                    });
+                  }
+                },
+              ),
+            ),
+            // Bookings list
+            Expanded(
+              child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : StreamBuilder<List<BookingModel>>(
+                    stream: _getFilteredBookings(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error loading bookings: ${snapshot.error}'));
+                      }
+
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final bookings = snapshot.data ?? [];
+                      if (bookings.isEmpty) {
+                        return const Center(
+                          child: Text('No bookings found'),
+                        );
+                      }
+
+                      return ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: bookings.length,
+                        itemBuilder: (context, index) {
+                          final booking = bookings[index];
+                          return _buildBookingCard(booking.toMap());
+                        },
+                      );
+                    },
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMainContent() {
-    return Column(
-      children: [
-        // Display only Pending and Approved bookings
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _allBookings.where((booking) => 
-                  booking['status'] == 'pending' || booking['status'] == 'approved').isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No pending or approved bookings.',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _allBookings.where((booking) => 
-                        booking['status'] == 'pending' || booking['status'] == 'approved').length,
-                      itemBuilder: (context, index) {
-                        final booking = _allBookings.where((booking) => 
-                          booking['status'] == 'pending' || booking['status'] == 'approved').toList()[index];
-                        return _buildBookingCard(booking);
-                      },
-                    ),
-        ),
-      ],
-    );
+  Stream<List<BookingModel>> _getFilteredBookings() {
+    return Stream.value(_filteredBookings.map((booking) {
+      // Convert DateTime to Timestamp
+      if (booking['createdAt'] is DateTime) {
+        booking['createdAt'] = Timestamp.fromDate(booking['createdAt'] as DateTime);
+      }
+      return BookingModel.fromMap(booking);
+    }).toList());
   }
 }

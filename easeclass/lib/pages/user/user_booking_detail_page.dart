@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/booking_model.dart';
 import '../../services/booking_service.dart';
 import '../../theme/app_colors.dart';
@@ -20,6 +21,24 @@ class UserBookingDetailPage extends StatefulWidget {
 class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
   final BookingService _bookingService = BookingService();
   bool _isLoading = false;
+  late BookingModel _currentBooking;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentBooking = widget.booking;
+    _listenToBookingUpdates();
+  }
+
+  void _listenToBookingUpdates() {
+    _bookingService.getBookingById(widget.booking.id).then((updatedBooking) {
+      if (updatedBooking != null && mounted) {
+        setState(() {
+          _currentBooking = updatedBooking;
+        });
+      }
+    });
+  }
 
   Future<void> _cancelBooking() async {
     final confirmed = await showDialog<bool>(
@@ -46,6 +65,14 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
     try {
       await _bookingService.cancelBooking(widget.booking.id);
       if (mounted) {
+        // Get the updated booking
+        final updatedBooking = await _bookingService.getBookingById(widget.booking.id);
+        if (updatedBooking != null) {
+          setState(() {
+            _currentBooking = updatedBooking;
+          });
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Booking cancelled successfully')),
         );
@@ -65,74 +92,141 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
     }
   }
 
+  Future<void> _completeBooking() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete Booking'),
+        content: const Text('Are you sure you want to mark this booking as completed?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await _bookingService.completeBooking(widget.booking.id);
+      if (mounted) {
+        // Get the updated booking
+        final updatedBooking = await _bookingService.getBookingById(widget.booking.id);
+        if (updatedBooking != null) {
+          setState(() {
+            _currentBooking = updatedBooking;
+          });
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking marked as completed')),
+        );
+        widget.onBookingUpdated();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error completing booking: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Booking Details'),
-        elevation: 0,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Status Card with gradient background
                   _buildStatusCard(),
-                  
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Room Details Card
+                        _buildTimelineCard(),
+                        const SizedBox(height: 16),
                         _buildInfoCard(
-                          'Room Details',
-                          Icons.meeting_room,
+                          'Class Information',
+                          Icons.class_,
                           [
-                            _buildInfoRow('Room', widget.booking.roomDetails?['name'] ?? 'Room ${widget.booking.roomId}'),
-                            _buildInfoRow('Building', widget.booking.roomDetails?['building'] ?? '-'),
-                            _buildInfoRow('Floor', widget.booking.roomDetails?['floor']?.toString() ?? '-'),
-                            _buildInfoRow('Capacity', '${widget.booking.roomDetails?['capacity'] ?? '-'} people'),
-                            if (widget.booking.roomDetails?['features'] != null && 
-                                widget.booking.roomDetails!['features'] is List)
-                              _buildInfoRow(
-                                'Features',
-                                (widget.booking.roomDetails!['features'] as List).join(', '),
-                              ),
+                            _buildInfoRow('Name', _currentBooking.roomDetails['name'] ?? 'N/A'),
+                            _buildInfoRow('Building', _currentBooking.roomDetails['building'] ?? 'N/A'),
+                            _buildInfoRow('Floor', (_currentBooking.roomDetails['floor'] ?? 'N/A').toString()),
+                            _buildInfoRow('Capacity', '${_currentBooking.roomDetails['capacity'] ?? 'N/A'} people'),
                           ],
                         ),
                         const SizedBox(height: 16),
-
-                        // Booking Details Card
                         _buildInfoCard(
                           'Booking Details',
                           Icons.event,
                           [
-                            _buildInfoRow('Date', widget.booking.date),
-                            _buildInfoRow('Time', widget.booking.time),
-                            _buildInfoRow('Purpose', widget.booking.purpose),
+                            _buildInfoRow('Date', _currentBooking.date),
+                            _buildInfoRow('Time', _formatTimeWithDuration(_currentBooking.time, _currentBooking.duration ?? 1)),
+                            _buildPurposeRow(_currentBooking.purpose),
+                            if (_currentBooking.extraItemsNotes != null && _currentBooking.extraItemsNotes!.isNotEmpty)
+                              _buildExtraItemsRow(_currentBooking.extraItemsNotes!),
                             _buildInfoRow(
                               'Created At',
-                              _formatTimestamp(widget.booking.createdAt),
+                              _formatTimestamp(_currentBooking.createdAt),
                             ),
                           ],
                         ),
                         const SizedBox(height: 16),
 
                         // Admin Response Card (if rejected)
-                        if (widget.booking.status.toLowerCase() == 'rejected' && 
-                            widget.booking.adminResponseReason != null)
+                        if (_currentBooking.status.toLowerCase() == 'rejected' && 
+                            _currentBooking.adminResponseReason != null)
                           _buildRejectionCard(),
                         
                         const SizedBox(height: 24),
 
+                        // Action Buttons
+                        if (_currentBooking.isActive)
+                          Column(
+                            children: [
+                              // Complete Button (only for approved bookings)
+                              if (_currentBooking.status.toLowerCase() == 'approved')
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: ElevatedButton.icon(
+                                    onPressed: _completeBooking,
+                                    icon: const Icon(Icons.check_circle),
+                                    label: const Text('Complete Booking'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 12),
                         // Cancel Button (only for active bookings)
-                        if (widget.booking.isActive)
-                          SizedBox(
+                              Container(
                             width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: ElevatedButton.icon(
                               onPressed: _cancelBooking,
                               icon: const Icon(Icons.cancel),
@@ -143,9 +237,12 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 2,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                       ],
                     ),
@@ -160,37 +257,44 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
     Color statusColor;
     IconData statusIcon;
     String statusText;
+    String statusDescription;
 
-    switch (widget.booking.status.toLowerCase()) {
+    switch (_currentBooking.status.toLowerCase()) {
       case 'pending':
         statusColor = Colors.orange;
         statusIcon = Icons.pending_actions;
         statusText = 'Pending Approval';
+        statusDescription = 'Your booking request is being reviewed by the administrator.';
         break;
       case 'approved':
         statusColor = Colors.green;
         statusIcon = Icons.check_circle;
         statusText = 'Approved';
+        statusDescription = 'Your booking has been approved. You can use the class at the scheduled time.';
         break;
       case 'completed':
         statusColor = Colors.blue;
         statusIcon = Icons.done_all;
         statusText = 'Completed';
+        statusDescription = 'This booking has been completed.';
         break;
       case 'cancelled':
         statusColor = Colors.red;
         statusIcon = Icons.cancel;
         statusText = 'Cancelled';
+        statusDescription = 'This booking has been cancelled.';
         break;
       case 'rejected':
         statusColor = Colors.red.shade700;
         statusIcon = Icons.block;
         statusText = 'Rejected';
+        statusDescription = 'This booking request was not approved.';
         break;
       default:
         statusColor = Colors.grey;
         statusIcon = Icons.info;
         statusText = 'Unknown';
+        statusDescription = 'The status of this booking is unknown.';
     }
 
     return Container(
@@ -227,10 +331,10 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Booking ID: ${widget.booking.id}',
+            statusDescription,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 14,
+              color: statusColor.withOpacity(0.8),
             ),
           ),
         ],
@@ -251,7 +355,7 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
           children: [
             Row(
               children: [
-                Icon(icon, color: Theme.of(context).primaryColor),
+                Icon(icon, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Text(
                   title,
@@ -270,64 +374,19 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
     );
   }
 
-  Widget _buildRejectionCard() {
-    return Card(
-              elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      color: Colors.red.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                Icon(Icons.info_outline, color: Colors.red.shade700),
-                const SizedBox(width: 8),
-                        Text(
-                  'Rejection Reason',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-            const Divider(height: 24),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Text(
-                widget.booking.adminResponseReason!,
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 100,
             child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
+              label,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -344,17 +403,284 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
     );
   }
 
-  String _formatTimestamp(dynamic timestamp) {
-    try {
-      DateTime date;
-      if (timestamp is DateTime) {
-        date = timestamp;
-      } else {
-        date = timestamp.toDate();
-      }
-      return '${date.day}/${date.month}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return 'N/A';
+  Widget _buildPurposeRow(String purpose) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: const Text(
+              'Purpose',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              purpose,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExtraItemsRow(String notes) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: const Text(
+              'Additional Notes',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              notes,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRejectionCard() {
+    return Card(
+      elevation: 2,
+      color: Colors.red.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.red),
+                SizedBox(width: 8),
+                Text(
+                  'Rejection Reason',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _currentBooking.adminResponseReason ?? 'No reason provided',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimelineCard() {
+    final status = _currentBooking.status.toLowerCase();
+
+    final steps = [
+      {
+        'icon': Icons.pending_actions,
+        'label': 'Pending Approval',
+        'completed': status != 'pending',
+        'description': 'Booking request submitted'
+      },
+      {
+        'icon': Icons.check_circle,
+        'label': 'Approved',
+        'completed': status == 'approved' || status == 'completed',
+        'description': status == 'approved' || status == 'completed' 
+            ? 'Booking approved'
+            : 'Waiting for approval'
+      },
+      {
+        'icon': Icons.done_all,
+        'label': 'Completed',
+        'completed': status == 'completed',
+        'description': status == 'completed' ? 'Booking completed' : 'Waiting for completion'
+      },
+    ];
+
+    // Add cancelled/rejected step if applicable
+    if (status == 'cancelled' || status == 'rejected') {
+      steps.add({
+        'icon': status == 'cancelled' ? Icons.cancel : Icons.block,
+        'label': status == 'cancelled' ? 'Cancelled' : 'Rejected',
+        'completed': true,
+        'description': status == 'cancelled' ? 'Booking cancelled' : 'Booking rejected'
+      });
     }
+
+    // Determine the index of the current step
+    int currentIndex = -1;
+    if (status == 'pending') {
+      currentIndex = 0;
+    } else if (status == 'approved') {
+      currentIndex = 1;
+    } else if (status == 'completed') {
+      currentIndex = 2;
+    } else if (status == 'cancelled' || status == 'rejected') {
+      currentIndex = 3;
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.timeline, color: AppColors.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  'Booking Timeline',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            ...List.generate(steps.length, (index) {
+              final step = steps[index];
+              final isCompleted = index <= currentIndex;
+              final isCurrent = index == currentIndex;
+              final isLast = index == steps.length - 1;
+
+              Color iconColor = Colors.grey;
+              Color textColor = Colors.grey;
+              Color descriptionColor = Colors.grey.shade600;
+              FontWeight textWeight = FontWeight.normal;
+              Color iconContainerColor = Colors.grey.withOpacity(0.1);
+
+              if (isCurrent) {
+                iconColor = AppColors.primary;
+                textColor = AppColors.primary;
+                descriptionColor = AppColors.primary;
+                textWeight = FontWeight.bold;
+                iconContainerColor = AppColors.primary.withOpacity(0.2);
+              } else if (isCompleted) {
+                iconColor = AppColors.primary.withOpacity(0.7);
+                textColor = AppColors.primary.withOpacity(0.7);
+                descriptionColor = AppColors.primary.withOpacity(0.5);
+              }
+
+              return Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: iconContainerColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              step['icon'] as IconData,
+                              color: iconColor,
+                              size: 20,
+                            ),
+                          ),
+                          if (!isLast)
+                            Container(
+                              width: 2,
+                              height: 40,
+                              color: isCompleted ? AppColors.primary.withOpacity(0.5) : Colors.grey.withOpacity(0.3),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              step['label'] as String,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: textWeight,
+                                color: textColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              step['description'] as String,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: descriptionColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTimeWithDuration(String time, int duration) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    // Parse the time
+    final timeComponents = timeValue.split(':');
+    final hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    // Calculate end time
+    final startTime = DateTime(2024, 1, 1, hour, minute);
+    final endTime = startTime.add(Duration(hours: duration));
+    
+    // Format end time
+    final endHour = endTime.hour;
+    final endMinute = endTime.minute;
+    final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+    final formattedEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+    
+    return '$time - ${formattedEndHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')} $endPeriod';
+  }
+
+  String _formatTimestamp(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 } 

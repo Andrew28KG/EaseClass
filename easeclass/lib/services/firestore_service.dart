@@ -3,9 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../models/class_model.dart';
 import '../models/booking_model.dart';
-import '../models/review_model.dart';
+import '../models/review.dart';
 import '../models/faq_model.dart';
 import '../models/event_model.dart';
+import '../models/time_slot.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -69,7 +70,7 @@ class FirestoreService {
       return [];
     }
   }
-
+  
   Stream<List<ClassModel>> getClassesStream() {
     return _classesCollection.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) => ClassModel.fromFirestore(doc)).toList();
@@ -171,14 +172,14 @@ class FirestoreService {
   }
 
   // Review operations
-  Future<List<ReviewModel>> getClassReviews(String classId) async {
+  Future<List<Review>> getClassReviews(String classId) async {
     try {
       final QuerySnapshot snapshot = await _reviewsCollection
           .where('classId', isEqualTo: classId)
           .orderBy('createdAt', descending: true)
           .get();
       
-      return snapshot.docs.map((doc) => ReviewModel.fromFirestore(doc)).toList();
+      return snapshot.docs.map((doc) => Review.fromFirestore(doc)).toList();
     } catch (e) {
       print('Error getting class reviews: $e');
       return [];
@@ -202,11 +203,12 @@ class FirestoreService {
       final reviewId = _reviewsCollection.doc().id;
       final now = Timestamp.now();
       
-      final review = ReviewModel(
+      final review = Review(
         id: reviewId,
         classId: roomId,
         userId: currentUser.id,
         bookingId: bookingId,
+        userName: currentUser.displayName ?? 'Anonymous',
         rating: rating,
         comment: comment ?? '',
         createdAt: now,
@@ -245,7 +247,7 @@ class FirestoreService {
     }
   }
 
-  Future<bool> addReview(ReviewModel review) async {
+  Future<bool> addReview(Review review) async {
     try {
       await _reviewsCollection.doc(review.id).set(review.toMap());
       

@@ -14,16 +14,6 @@ class AdminBookedRoomsPage extends StatefulWidget {
 
 class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
   final BookingService _bookingService = BookingService();
-  String _selectedFilter = 'All';
-
-  final List<String> _filterOptions = [
-    'All',
-    'Pending',
-    'Approved',
-    'Completed',
-    'Cancelled',
-    'Rejected',
-  ];
 
   @override
   void initState() {
@@ -35,7 +25,7 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
     // Convert booking data to BookingModel
     final bookingModel = BookingModel(
       id: bookingData['id'] ?? '',
-      userId: bookingData['userId'] ?? '', // Included userId
+      userId: bookingData['userId'] ?? '',
       roomId: bookingData['roomId'] ?? '',
       date: bookingData['date'] ?? '',
       time: bookingData['time'] ?? '',
@@ -60,7 +50,7 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
         builder: (context) => BookingDetailPage(
           booking: bookingModel,
           onBookingUpdated: () {
-            // No need to manually refresh, StreamBuilder will handle it
+            setState(() {}); // Refresh the page
           },
         ),
       ),
@@ -69,43 +59,42 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
       children: [
-        // Filter chips
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _filterOptions.map((filter) {
-                final isSelected = filter == _selectedFilter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: FilterChip(
-                    label: Text(filter),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedFilter = filter;
-                      });
-                    },
-                    backgroundColor: Colors.grey.shade100,
-                    selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
-                    checkmarkColor: Theme.of(context).primaryColor,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Theme.of(context).primaryColor : Colors.black87,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ),
-
+          // Removed Filter dropdown as requested
+          // Container(
+          //   padding: const EdgeInsets.all(16),
+          //   child: DropdownButtonFormField<String>(
+          //     value: _selectedFilter,
+          //     decoration: InputDecoration(
+          //       labelText: 'Filter by Status',
+          //       border: OutlineInputBorder(
+          //         borderRadius: BorderRadius.circular(8),
+          //       ),
+          //       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          //     ),
+          //     items: _filterOptions.map((String value) {
+          //       return DropdownMenuItem<String>(
+          //         value: value,
+          //         child: Text(value),
+          //       );
+          //     }).toList(),
+          //     onChanged: (String? newValue) {
+          //       if (newValue != null) {
+          //         setState(() {
+          //           _selectedFilter = newValue;
+          //         });
+          //       }
+          //     },
+          //   ),
+          // ),
+          // Bookings list - now only shows pending approvals
         Expanded(
           child: StreamBuilder<List<BookingModel>>(
-            stream: _getFilteredBookings(),
+              // Directly stream pending bookings
+              stream: _bookingService.getBookingsByStatus('pending'),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(child: Text('Error loading bookings: ${snapshot.error}'));
@@ -147,7 +136,7 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
                   final bookingMap = { 
                     'id': booking.id,
                     'roomId': booking.roomId,
-                    'roomName': booking.roomDetails?['name'] ?? 'Room ${booking.roomId}',
+                      'roomName': booking.roomDetails?['name'] ?? 'Class ${booking.roomId}',
                     'building': booking.roomDetails?['building'] ?? '-',
                     'floor': booking.roomDetails?['floor']?.toString() ?? '-',
                     'capacity': booking.roomDetails?['capacity'] ?? 0,
@@ -168,27 +157,85 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
           ),
         ),
       ],
+      ),
     );
   }
 
-  Stream<List<BookingModel>> _getFilteredBookings() {
-    switch (_selectedFilter) {
-      case 'Pending':
-        return _bookingService.getBookingsByStatus('pending');
-      case 'Approved':
-        return _bookingService.getBookingsByStatus('approved');
-      case 'Completed':
-        return _bookingService.getBookingsByStatus('completed');
-      case 'Cancelled':
-        return _bookingService.getBookingsByStatus('cancelled');
-      case 'Rejected':
-        return _bookingService.getBookingsByStatus('rejected');
-      default:
-        return _bookingService.getAllBookings();
-    }
+  Widget _buildBookingCard(Map<String, dynamic> booking) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: InkWell(
+        onTap: () => _navigateToBookingDetail(booking),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      booking['roomName'] ?? 'Class ${booking['roomId']}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(booking['status']).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _getStatusText(booking['status']),
+                      style: TextStyle(
+                        color: _getStatusColor(booking['status']),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Date: ${booking['date']}',
+                style: const TextStyle(fontSize: 14),
+              ),
+              Text(
+                'Time: ${_formatTimeWithDuration(booking['time'], booking['duration'] ?? 1)}',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Purpose: ${booking['purpose']}',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Booked by: ${booking['userName']}',
+                style: const TextStyle(fontSize: 14),
+              ),
+              if (booking['adminResponseReason'] != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Admin Response: ${booking['adminResponseReason']}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  String _getStatusChip(String status) {
+  String _getStatusText(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
         return '⏱️ Pending';
@@ -208,11 +255,11 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return Colors.orange;
+        return AppColors.warning;
       case 'approved':
-        return Colors.green;
+        return AppColors.success;
       case 'completed':
-        return Colors.blue;
+        return Colors.green;
       case 'cancelled':
       case 'rejected':
         return Colors.red;
@@ -221,144 +268,27 @@ class _AdminBookedRoomsPageState extends State<AdminBookedRoomsPage> {
     }
   }
 
-  Widget _buildBookingCard(Map<String, dynamic> booking) {
-    // This is the existing card widget for displaying booking information
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: _getStatusColor(booking['status']).withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-           _navigateToBookingDetail(booking); // Navigate to detail page on tap
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      booking['roomName'] ?? 'Unknown Room',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    _getStatusChip(booking['status']),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: _getStatusColor(booking['status']),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'By: ${booking['userName'] ?? 'N/A'}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${booking['date'] ?? '-'} | ${booking['time'] ?? '-'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Building ${booking['building'] ?? '-'}, Floor ${booking['floor'] ?? '-'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ],
-              ),
-               const SizedBox(height: 8),
-               Row(
-                 children: [
-                   const Icon(Icons.meeting_room_outlined, size: 16, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Capacity: ${booking['capacity'] ?? 'N/A'}',
-                       style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                 ],
-               ),
-               if (booking['features'] != null && booking['features'].isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                   Row(
-                    children: [
-                      const Icon(Icons.extension, size: 16, color: Colors.grey),
-                       const SizedBox(width: 4),
-                       Expanded(
-                         child: Text(
-                           'Features: ${booking['features'].join(', ')}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                         ),
-                       ),
-                    ],
-                  ),
-               ],
-               const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.notes, size: 16, color: Colors.grey),
-                     const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                         'Purpose: ${booking['purpose'] ?? 'N/A'}',
-                          style: TextStyle(
-                           fontSize: 14,
-                            color: Colors.grey.shade700,
-                           ),
-                           maxLines: 2,
-                           overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+  // Helper to format time with duration (copied from user booking detail page)
+  String _formatTimeWithDuration(String time, int duration) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    // Parse the time
+    final timeComponents = timeValue.split(':');
+    final hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    // Calculate end time
+    final startTime = DateTime(2024, 1, 1, hour, minute);
+    final endTime = startTime.add(Duration(hours: duration));
+    
+    // Format end time
+    final endHour = endTime.hour;
+    final endMinute = endTime.minute;
+    final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+    final formattedEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+    
+    return '$time - ${formattedEndHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')} $endPeriod';
   }
 }

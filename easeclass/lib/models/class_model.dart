@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'time_slot.dart';
+import 'review.dart';
 
 class ClassModel {
   final String id;
@@ -17,6 +18,8 @@ class ClassModel {
   final Map<String, dynamic>? metadata;
   final Timestamp createdAt;
   final Timestamp updatedAt;
+  final int totalReviews;
+  final List<Review> reviews;
 
   ClassModel({
     required this.id,
@@ -34,6 +37,8 @@ class ClassModel {
     this.metadata,
     required this.createdAt,
     required this.updatedAt,
+    this.totalReviews = 0,
+    this.reviews = const [],
   });
 
   ClassModel copyWith({
@@ -52,6 +57,8 @@ class ClassModel {
     Map<String, dynamic>? metadata,
     Timestamp? createdAt,
     Timestamp? updatedAt,
+    int? totalReviews,
+    List<Review>? reviews,
   }) {
     return ClassModel(
       id: id ?? this.id,
@@ -69,6 +76,8 @@ class ClassModel {
       metadata: metadata ?? this.metadata,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      totalReviews: totalReviews ?? this.totalReviews,
+      reviews: reviews ?? this.reviews,
     );
   }
 
@@ -99,6 +108,10 @@ class ClassModel {
       metadata: data['metadata'],
       createdAt: data['createdAt'] ?? Timestamp.now(),
       updatedAt: data['updatedAt'] ?? Timestamp.now(),
+      totalReviews: data['totalReviews'] ?? 0,
+      reviews: (data['reviews'] as List<dynamic>? ?? [])
+          .map((review) => Review.fromMap(review))
+          .toList(),
     );
   }
 
@@ -119,6 +132,8 @@ class ClassModel {
       'metadata': metadata,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'totalReviews': totalReviews,
+      'reviews': reviews.map((review) => review.toMap()).toList(),
     };
   }
   
@@ -141,6 +156,10 @@ class ClassModel {
       metadata: map['metadata'],
       createdAt: map['createdAt'] ?? Timestamp.now(),
       updatedAt: map['updatedAt'] ?? Timestamp.now(),
+      totalReviews: map['totalReviews'] ?? 0,
+      reviews: (map['reviews'] as List<dynamic>?)
+          ?.map((review) => Review.fromMap(review))
+          .toList() ?? [],
     );
   }
 }
