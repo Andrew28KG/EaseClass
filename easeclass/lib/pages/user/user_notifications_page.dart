@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/notification_model.dart';
 import '../../models/booking_model.dart';
 import 'user_history_booking_detail_page.dart';
+import '../../utils/navigation_helper.dart';
 
 class UserNotificationsPage extends StatefulWidget {
   const UserNotificationsPage({Key? key}) : super(key: key);
@@ -56,10 +57,9 @@ class _UserNotificationsPageState extends State<UserNotificationsPage> {
       }
       final booking = BookingModel.fromFirestore(doc);
       Navigator.of(context, rootNavigator: true).pop(); // Close loading FIRST
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => UserHistoryBookingDetailPage(booking: booking)),
-      );
+      
+      // Use NavigationHelper to navigate to booking details
+      NavigationHelper.navigateToUserBookingDetails(context, booking);
     } catch (e) {
       Navigator.of(context, rootNavigator: true).pop(); // Close loading
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error loading booking.')));
@@ -71,6 +71,13 @@ class _UserNotificationsPageState extends State<UserNotificationsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Navigate back to home tab
+            NavigationHelper.navigateToTab(context, 0);
+          },
+        ),
       ),
       body: StreamBuilder<List<NotificationModel>>(
         stream: _userNotificationsStream(),

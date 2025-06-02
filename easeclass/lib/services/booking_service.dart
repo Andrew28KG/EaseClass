@@ -178,6 +178,33 @@ class BookingService {
         .asyncMap((future) => future);
   }
 
+  // Helper to check if user has enabled notifications for a specific type
+  Future<bool> _isNotificationEnabled(String userId, String type) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) return true; // Default to true if settings don't exist
+      
+      final data = userDoc.data();
+      if (data == null) return true;
+      
+      final notifications = data['notifications'] as Map<String, dynamic>?;
+      if (notifications == null) return true;
+      
+      // Map notification types to settings
+      switch (type) {
+        case 'pending':
+          return notifications['pendingApproval'] ?? true;
+        case 'approved':
+          return notifications['approved'] ?? true;
+        default:
+          return true;
+      }
+    } catch (e) {
+      print('Error checking notification settings: $e');
+      return true; // Default to true if there's an error
+    }
+  }
+
   // Helper to create a notification
   Future<void> _createNotification({
     required String userId,
@@ -186,6 +213,10 @@ class BookingService {
     required String type,
     required String bookingId,
   }) async {
+    // Check if notifications are enabled for this type
+    final isEnabled = await _isNotificationEnabled(userId, type);
+    if (!isEnabled) return; // Don't create notification if disabled
+
     await _firestore.collection('notifications').add({
       'userId': userId,
       'title': title,
@@ -585,5 +616,11 @@ class BookingService {
       print('Error getting bookings for room $roomId: $e');
       return [];
     }
+  }
+
+  // Submit rating for a completed booking
+  Future<void> submitRating(String bookingId, double rating) async {
+    // Ensure class details are fetched using _classesCollection if needed here
+    // ... existing code ...
   }
 }

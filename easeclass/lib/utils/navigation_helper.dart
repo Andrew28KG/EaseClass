@@ -9,6 +9,8 @@ import '../pages/auth_page.dart';
 import '../pages/user/user_bookings_page.dart';
 import '../models/booking_model.dart'; // Import BookingModel
 import '../pages/user/user_booking_detail_page.dart'; // Import UserBookingDetailPage
+import '../main.dart'; // Import MainPage
+import '../pages/user/user_notifications_page.dart'; // Import UserNotificationsPage
 
 /// Helper class to handle navigation in the app with the nested navigation structure
 class NavigationHelper {
@@ -19,8 +21,13 @@ class NavigationHelper {
 
   /// Navigate to a specific tab and reset to its root
   static void navigateToTab(BuildContext context, int tabIndex) {
-    Navigator.of(context, rootNavigator: true)
-        .pushReplacementNamed('/home', arguments: tabIndex);
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const MainPage(),
+        settings: RouteSettings(arguments: tabIndex),
+      ),
+      (route) => false,
+    );
   }
 
   /// Navigate back within the current tab
@@ -174,13 +181,22 @@ class NavigationHelper {
       MaterialPageRoute(
         builder: (context) => UserBookingDetailPage(
           booking: booking,
-          onBookingUpdated: () { // Provide a callback for refresh if needed
-            // This callback can be used to trigger a refresh in the previous page
-            // For now, we can leave it empty or add a print statement
+          onBookingUpdated: () {
             print('Booking updated from detail page');
           },
         ),
       ),
+    );
+  }
+
+  /// Navigate to notifications page
+  static void navigateToNotifications(BuildContext context) {
+    // Use pushAndRemoveUntil to clear the navigation stack and show notifications
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const UserNotificationsPage(),
+      ),
+      (route) => false,
     );
   }
 }

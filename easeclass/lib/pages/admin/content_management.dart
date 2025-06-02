@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/faq_model.dart';
 import '../../services/firestore_service.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
 
 class ContentManagementPage extends StatefulWidget {
   const ContentManagementPage({Key? key}) : super(key: key);
@@ -773,7 +770,6 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
   }
 
   // Event Slider Management
-    // Event Slider Management
   void _showEventDialog(Map<String, dynamic> event) async {
     debugPrint("Attempting to show event dialog for event ID: ${event['id']}");
     final isEditing = event['id'] != null && event['id'] is String && event['id'].isNotEmpty;
@@ -781,10 +777,7 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
     final contentController = TextEditingController(text: event['content'] ?? '');
     bool isActive = event['isActive'] ?? true;
     int order = event['order'] ?? (_events.length + 1);
-    // Store the initial image URL separately
-    String? initialImageUrl = event['imageUrl'];
-    // Placeholder image URL in case no image is set
-    const String placeholderImageUrl = 'https://via.placeholder.com/150'; // Example placeholder
+    final imageUrlController = TextEditingController(text: event['imageUrl'] ?? '');
 
     debugPrint("Dialog variables initialized.");
 
@@ -793,281 +786,217 @@ class _ContentManagementPageState extends State<ContentManagementPage> {
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
-          debugPrint("StatefulBuilder started for dialog.");
-          File? _selectedImage; // State variable for the selected image file
-          String? _currentImageUrl = initialImageUrl; // State variable for the current image URL (either initial or newly uploaded)
-
-          // Function to pick an image from the gallery
-          Future<void> _pickEventImage() async {
-            debugPrint("Attempting to pick image.");
-            final picker = ImagePicker();
-            final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-            if (pickedFile != null) {
-              setState(() {
-                _selectedImage = File(pickedFile.path);
-                // Clear the current image URL when a new image is selected
-                _currentImageUrl = null;
-              });
-              debugPrint("Image picked successfully: ${_selectedImage?.path}");
-            } else {
-              debugPrint("Image picking cancelled.");
-            }
-          }
-
-          // Function to upload the image to Firebase Storage
-          Future<String?> _uploadEventImage(File imageFile) async {
-            debugPrint("Attempting to upload image: ${imageFile.path}");
-            try {
-              final storageRef = FirebaseStorage.instance.ref();
-              // Create a unique name for the image file
-              final imageName = 'event_images/${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
-              final uploadTask = storageRef.child(imageName).putFile(imageFile);
-              debugPrint("Upload task created.");
-              final snapshot = await uploadTask.whenComplete(() {
-                debugPrint("Upload task completed.");
-              });
-              final downloadUrl = await snapshot.ref.getDownloadURL();
-              debugPrint("Image uploaded successfully. Download URL: $downloadUrl");
-              return downloadUrl;
-            } catch (e) {
-              debugPrint('Error uploading event image: $e');
-              // Optionally show an error message to the user
-              if(mounted) {
-                 ScaffoldMessenger.of(context).showSnackBar(
-                   SnackBar(content: Text('Failed to upload image: $e')),
-                 );
-              }
-              return null;
-            }
-          }
-
-          debugPrint("Building AlertDialog UI.");
-          return AlertDialog(
-            title: Text(isEditing ? 'Edit Event' : 'Add New Event'),
-            content: SingleChildScrollView(
+          return Dialog(
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(labelText: 'Title'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: contentController,
-                    decoration: const InputDecoration(labelText: 'Content'),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  // Image section
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Event Image',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      isEditing ? 'Edit Event' : 'Add New Event',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 8),
-                      // Display current image or preview of selected image, or placeholder
-                      Container(
-                        height: 150,
-                        width: double.infinity,
-                        color: Colors.grey[300],
-                        child: _selectedImage != null
-                            ? Image.file(
-                                _selectedImage!,
-                                fit: BoxFit.cover,
-                              )
-                            : (_currentImageUrl?.isNotEmpty == true
-                                ? Image.network(
-                                    _currentImageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Center(
-                                      child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600]),
-                                    ),
-                                     loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        height: 150,
-                                        color: Colors.grey[300],
-                                        child: Center(
-                                          child: CircularProgressIndicator(
-                                            value: loadingProgress.expectedTotalBytes != null
-                                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                                : null,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  )
-                                : Image.network( // Placeholder image
-                                    placeholderImageUrl,
-                                     fit: BoxFit.cover,
-                                     errorBuilder: (context, error, stackTrace) => Center(
-                                      child: Icon(Icons.broken_image, size: 50, color: Colors.grey[600]),
-                                    ),
-                                     loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        height: 150,
-                                        color: Colors.grey[300],
-                                        child: Center(
-                                          child: CircularProgressIndicator(
-                                            value: loadingProgress.expectedTotalBytes != null
-                                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                                : null,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  )
+                    ),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Title',
+                              border: OutlineInputBorder(),
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: contentController,
+                            decoration: const InputDecoration(
+                              labelText: 'Content',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Event Image URL',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: imageUrlController,
+                            decoration: const InputDecoration(
+                              labelText: 'Image URL',
+                              hintText: 'Enter image URL',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.url,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          const SizedBox(height: 16),
+                          if (imageUrlController.text.trim().isNotEmpty)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Image Preview:',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  height: 150,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      imageUrlController.text.trim(),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => Container(
+                                        color: Colors.grey[200],
+                                        child: const Center(
+                                          child: Text('Failed to load image'),
+                                        ),
+                                      ),
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return Container(
+                                          color: Colors.grey[200],
+                                          child: Center(
+                                            child: CircularProgressIndicator(
+                                              value: loadingProgress.expectedTotalBytes != null
+                                                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                  : null,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Container(
+                              height: 150,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.image,
+                                  size: 50,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 24),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      // Button to pick image
-                      TextButton.icon(
-                        onPressed: _pickEventImage,
-                        icon: const Icon(Icons.image),
-                        label: Text(_selectedImage != null || (_currentImageUrl?.isNotEmpty == true) ? 'Change Image' : 'Insert Image'),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: const SizedBox.shrink(), // Placeholder after removing active switch
+                  Container(
+                    padding: const EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      border: Border(
+                        top: BorderSide(color: Colors.grey.shade200),
                       ),
-                      // Only show order for existing events or when adding beyond initial 4
-                      // Simplified: always show order input if needed, adjust logic later if required
-                      // For now, we'll just use the event's current order or a default
-                      // TextFormField(
-                      //   decoration: const InputDecoration(labelText: 'Order'),
-                      //   keyboardType: TextInputType.number,
-                      //   initialValue: order.toString(),
-                      //   onChanged: (value) {
-                      //     order = int.tryParse(value) ?? order;
-                      //   },
-                      // ),
-                    ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () async {
+                            String finalImageUrl = imageUrlController.text.trim();
+
+                            final eventData = {
+                              'title': titleController.text.trim(),
+                              'content': contentController.text.trim(),
+                              'isActive': true,
+                              'order': order,
+                              'imageUrl': finalImageUrl.isNotEmpty ? finalImageUrl : null,
+                              'updatedAt': Timestamp.now(),
+                            };
+
+                            try {
+                              if (isEditing) {
+                                await _firestore
+                                    .collection('events')
+                                    .doc(event['id'])
+                                    .update(eventData);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Event updated successfully')),
+                                  );
+                                }
+                              } else {
+                                if (_events.length >= 4) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Cannot add more than 4 events.')),
+                                    );
+                                  }
+                                  Navigator.pop(context);
+                                  return;
+                                }
+                                eventData['createdAt'] = Timestamp.now();
+                                await _firestore.collection('events').add(eventData);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Event added successfully')),
+                                  );
+                                }
+                              }
+
+                              await _loadEvents();
+                              if (mounted) {
+                                Navigator.pop(context);
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error saving event: $e')),
+                                );
+                              }
+                            }
+                          },
+                          child: Text(isEditing ? 'Save' : 'Add'),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                   debugPrint("Cancel button pressed.");
-                   Navigator.pop(context);
-                },
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                   debugPrint("Save/Add button pressed.");
-                  if (titleController.text.isEmpty ||
-                      contentController.text.isEmpty) {
-                    if(mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please fill title and content')),
-                      );
-                    }
-                    debugPrint("Title or content is empty.");
-                    return;
-                  }
-
-                  // Determine the image URL to save
-                  String? finalImageUrl = _currentImageUrl; // Start with the current URL
-
-                  if (_selectedImage != null) {
-                    debugPrint("New image selected. Uploading...");
-                    // If a new image was selected, upload it
-                    final uploadedUrl = await _uploadEventImage(_selectedImage!);
-                    if (uploadedUrl == null) {
-                      // If upload failed, don't save the event
-                      debugPrint("Image upload failed. Not saving event.");
-                      return;
-                    }
-                    finalImageUrl = uploadedUrl;
-                     debugPrint("New image URL determined: $finalImageUrl");
-                  } else if (_currentImageUrl == '') {
-                     // If the remove image button was pressed
-                    finalImageUrl = null; // Or an empty string, depending on how you store 'no image'
-                     debugPrint("Image removed. Final URL set to null.");
-                  }
-                   // If _selectedImage is null and _currentImageUrl is not empty or '',
-                   // finalImageUrl remains the initialImageUrl, which is correct.
-
-                  final eventData = {
-                    'title': titleController.text.trim(),
-                    'content': contentController.text.trim(),
-                    'isActive': true,
-                    'order': order, // Keep existing order or default
-                    'imageUrl': finalImageUrl, // Use the determined image URL
-                    'updatedAt': Timestamp.now(),
-                  };
-
-                  eventData['isActive'] = true; // Events added/edited via dialog are always active
-
-                  try {
-                    if (isEditing) {
-                      debugPrint("Updating existing event: ${event['id']}");
-                      await _firestore
-                          .collection('events')
-                          .doc(event['id'])
-                          .update(eventData);
-                       if(mounted) {
-                         ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Event updated successfully')),
-                          );
-                       }
-                       debugPrint("Event updated in Firestore.");
-                    } else {
-                       debugPrint("Adding new event.");
-                       // When adding a new event, ensure we don't exceed 4
-                       if (_events.length >= 4) {
-                          if(mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                               const SnackBar(content: Text('Cannot add more than 4 events.')),
-                            );
-                          }
-                          debugPrint("Maximum events reached. Cannot add more.");
-                          Navigator.pop(context);
-                          return;
-                       }
-                       // For new events, the order might need careful consideration
-                       // Simple approach: add to the end and re-order might be needed manually
-                       eventData['createdAt'] = Timestamp.now();
-                       await _firestore.collection('events').add(eventData);
-                        if(mounted) {
-                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Event added successfully')),
-                          );
-                        }
-                         debugPrint("New event added to Firestore.");
-                    }
-
-                    // Refresh the events list
-                    debugPrint("Loading events after save.");
-                    await _loadEvents();
-
-                    if (mounted) {
-                      debugPrint("Closing dialog after save.");
-                      Navigator.pop(context);
-                    }
-                  } catch (e) {
-                    debugPrint('Error saving event: $e');
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error saving event: $e')),
-                      );
-                    }
-                  }
-                },
-                child: Text(isEditing ? 'Save' : 'Add'),
-              ),
-            ],
           );
         },
       ),

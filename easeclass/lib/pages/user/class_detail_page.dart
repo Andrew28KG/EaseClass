@@ -8,6 +8,8 @@ import '../../theme/app_colors.dart';
 import '../../utils/navigation_helper.dart';
 import '../../services/booking_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
+import 'class_reviews_page.dart';
 
 class ClassDetailPage extends StatefulWidget {
   final ClassModel classModel;
@@ -23,6 +25,7 @@ class ClassDetailPage extends StatefulWidget {
 
 class _ClassDetailPageState extends State<ClassDetailPage> {
   final BookingService _bookingService = BookingService();
+  final FirestoreService _firestoreService = FirestoreService();
   DateTime selectedDate = DateTime.now();
   String? selectedStartTime;
   int selectedDuration = 1;
@@ -363,203 +366,51 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     }
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
-    );
-    if (picked != null && picked != selectedDate) {
-      setState(() {
-        selectedDate = picked;
-      });
-      _fetchBookingsAndCalculateAvailableTimes(picked);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(
-                widget.classModel.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black54,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-              ),
-              background: widget.classModel.imageUrl != null && widget.classModel.imageUrl!.isNotEmpty
-                  ? Image.network(
-                      widget.classModel.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: AppColors.secondary.withOpacity(0.1),
-                        child: Icon(
-                          Icons.meeting_room,
-                          size: 48,
-                          color: AppColors.secondary,
-                        ),
-                      ),
-                    )
-                  : Container(
-                      color: AppColors.secondary.withOpacity(0.1),
-                      child: Icon(
-                        Icons.meeting_room,
-                        size: 48,
-                        color: AppColors.secondary,
-                      ),
-                    ),
+      appBar: AppBar(
+        title: Text(widget.classModel.name),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: AppColors.primaryGradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSectionHeader('Class Details'),
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.business, size: 18, color: Colors.grey[700]),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Building: ${widget.classModel.building}',
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                             children: [
-                              Icon(Icons.stairs, size: 18, color: Colors.grey[700]),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Floor: ${widget.classModel.floor}',
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ],
-                          ),
-                           const SizedBox(height: 8),
-                          Row(
-                             children: [
-                              Icon(Icons.people, size: 18, color: Colors.grey[700]),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Capacity: ${widget.classModel.capacity} people',
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          if (widget.classModel.description.isNotEmpty) ...[
-                            Text(
-                              widget.classModel.description,
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                          if (widget.classModel.features.isNotEmpty) ...[
-                            const Text(
-                              'Features:',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: widget.classModel.features.map((feature) => Chip(
-                                label: Text(feature),
-                                backgroundColor: AppColors.secondary.withOpacity(0.1),
-                              )).toList(),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  _buildSectionHeader('Top Reviews'),
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
+                  // Class Image
+                  Container(
+                    height: 200,
+                    width: double.infinity,
+                    child: widget.classModel.imageUrl != null && widget.classModel.imageUrl!.isNotEmpty
+                      ? Image.network(
+                          widget.classModel.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error loading image: $error');
+                            return Container(
+                              color: Colors.grey[200],
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
-                                      Icons.star,
-                                      color: AppColors.primary,
-                                      size: 24,
+                                      Icons.broken_image,
+                                      size: 48,
+                                      color: Colors.grey[400],
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(height: 8),
                                     Text(
-                                      widget.classModel.rating.toStringAsFixed(1),
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Overall Rating',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Based on ${widget.classModel.totalReviews} reviews',
+                                      'Failed to load image',
                                       style: TextStyle(
                                         color: Colors.grey[600],
                                         fontSize: 14,
@@ -568,248 +419,608 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                   ],
                                 ),
                               ),
-                            ],
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: Colors.grey[200],
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Colors.grey[200],
+                          child: Center(
+                            child: Icon(
+                              Icons.class_,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
                           ),
-                          const SizedBox(height: 16),
-                          const Divider(),
-                          const SizedBox(height: 16),
-
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: widget.classModel.reviews.length > 3 ? 3 : widget.classModel.reviews.length,
-                            itemBuilder: (context, index) {
-                              final review = widget.classModel.reviews[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        CircleAvatar(
-                                          backgroundColor: AppColors.primary.withOpacity(0.1),
-                                          child: Text(
-                                            review.userName[0].toUpperCase(),
-                                            style: TextStyle(
-                                              color: AppColors.primary,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
+                        ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Rating Section
+                        _buildRatingSection(),
+                        const SizedBox(height: 16),
+                        // Class Information
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Class Information',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _buildInfoRow(Icons.business, 'Building ${widget.classModel.building}'),
+                                const SizedBox(height: 8),
+                                _buildInfoRow(Icons.stairs, 'Floor ${widget.classModel.floor}'),
+                                const SizedBox(height: 8),
+                                _buildInfoRow(Icons.people, 'Capacity: ${widget.classModel.capacity} people'),
+                                const SizedBox(height: 8),
+                                _buildInfoRow(Icons.description, widget.classModel.description),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Features
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Features',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: widget.classModel.features.map((feature) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        feature,
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w500,
                                         ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Booking Form
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Book This Class',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Date Selection
+                                const Text(
+                                  'Select Date',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.white,
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                      ),
+                                      builder: (bottomSheetContext) => SafeArea(
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Text(
-                                                review.userName,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
                                               Row(
                                                 children: [
-                                                  Icon(
-                                                    Icons.star,
-                                                    size: 16,
-                                                    color: Colors.amber,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    review.rating.toString(),
+                                                  const Text(
+                                                    "Select Date",
                                                     style: TextStyle(
-                                                      color: Colors.grey[600],
-                                                      fontSize: 14,
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.bold,
                                                     ),
                                                   ),
+                                                  const Spacer(),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.close),
+                                                    onPressed: () => Navigator.pop(bottomSheetContext),
+                                                  ),
                                                 ],
+                                              ),
+                                              const SizedBox(height: 16),
+                                              CalendarDatePicker(
+                                                initialDate: selectedDate,
+                                                firstDate: DateTime.now(),
+                                                lastDate: DateTime.now().add(const Duration(days: 30)),
+                                                onDateChanged: (newDate) {
+                                                  if (newDate != selectedDate) {
+                                                    setState(() {
+                                                      selectedDate = newDate;
+                                                    });
+                                                    _fetchBookingsAndCalculateAvailableTimes(newDate);
+                                                  }
+                                                  Navigator.pop(bottomSheetContext);
+                                                },
                                               ),
                                             ],
                                           ),
                                         ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
                                         Text(
-                                          review.createdAt.toDate().toString().split(' ')[0],
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
+                                          '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                                          style: const TextStyle(fontSize: 16),
                                         ),
+                                        const Icon(Icons.calendar_today),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      review.comment,
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  _buildSectionHeader('Book This Class'),
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.calendar_today),
-                            title: const Text('Select Date'),
-                            subtitle: Text(
-                              '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                            ),
-                            onTap: () => _selectDate(context),
-                          ),
-                          const Divider(),
-
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                            child: DropdownButtonFormField<String>(
-                              decoration: InputDecoration(
-                                labelText: _isLoading ? 'Checking availability...' : 'Select Start Time (7 AM - 5 PM)',
-                                border: const OutlineInputBorder(),
-                              ),
-                              value: selectedStartTime,
-                              hint: _isLoading ? const Text('Loading...') : const Text('Choose a time'),
-                              items: _isLoading ? [] : _allPossibleStartTimes.map((String time) {
-                                 bool isAvailable = _currentAvailableStartTimes.contains(time);
-                                return DropdownMenuItem<String>(
-                                  value: time,
-                                  enabled: isAvailable,
-                                  child: Text(
-                                    time,
-                                    style: TextStyle(
-                                      color: isAvailable ? Colors.black : Colors.grey,
+                                const SizedBox(height: 16),
+                                // Time Selection
+                                const Text(
+                                  'Select Time',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: DropdownButton<String>(
+                                    value: selectedStartTime,
+                                    isExpanded: true,
+                                    hint: const Text('Select a time'),
+                                    underline: const SizedBox(),
+                                    items: _currentAvailableStartTimes.map((String time) {
+                                      return DropdownMenuItem<String>(
+                                        value: time,
+                                        child: Text(time),
+                                      );
+                                    }).toList(),
+                                    onChanged: (String? newValue) {
+                                      setState(() {
+                                        selectedStartTime = newValue;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Duration Selection
+                                const Text(
+                                  'Duration (hours)',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: DropdownButton<int>(
+                                    value: selectedDuration,
+                                    isExpanded: true,
+                                    underline: const SizedBox(),
+                                    items: _availableDurations.map((int duration) {
+                                      return DropdownMenuItem<int>(
+                                        value: duration,
+                                        child: Text('$duration hour${duration > 1 ? 's' : ''}'),
+                                      );
+                                    }).toList(),
+                                    onChanged: (int? newValue) {
+                                      if (newValue != null) {
+                                        setState(() {
+                                          selectedDuration = newValue;
+                                          _calculateAvailableStartTimes();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Purpose
+                                const Text(
+                                  'Purpose',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _purposeController,
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter the purpose of your booking',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                );
-                              }).toList(),
-                              onChanged: _isLoading ? null : (String? newValue) {
-                                setState(() {
-                                  selectedStartTime = newValue;
-                                });
-                              },
+                                  maxLines: 2,
+                                ),
+                                const SizedBox(height: 16),
+                                // Extra Items Notes
+                                const Text(
+                                  'Additional Notes (Optional)',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _extraItemsNotesController,
+                                  decoration: InputDecoration(
+                                    hintText: 'Any additional requirements or notes',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  maxLines: 2,
+                                ),
+                                const SizedBox(height: 24),
+                                // Book Button
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading ? null : _bookClass,
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child: _isLoading
+                                        ? const CircularProgressIndicator()
+                                        : const Text(
+                                            'Book Now',
+                                            style: TextStyle(fontSize: 16),
+                                          ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const Divider(),
-
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                            child: DropdownButtonFormField<int>(
-                              decoration: const InputDecoration(
-                                labelText: 'Select Duration (hours)',
-                                border: OutlineInputBorder(),
-                              ),
-                              value: selectedDuration,
-                              hint: const Text('Choose duration'),
-                              items: _availableDurations.map((int duration) {
-                                return DropdownMenuItem<int>(
-                                  value: duration,
-                                  child: Text('$duration hour${duration > 1 ? 's' : ''}'),
-                                );
-                              }).toList(),
-                              onChanged: _isLoading ? null : (int? newValue) {
-                                if (newValue != null) {
-                                  setState(() {
-                                    selectedDuration = newValue;
-                                    _calculateAvailableStartTimes();
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                          const Divider(),
-
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                            child: TextField(
-                              controller: _purposeController,
-                              decoration: const InputDecoration(
-                                labelText: 'Purpose of Booking',
-                                hintText: 'Enter the purpose of your booking',
-                                border: OutlineInputBorder(),
-                              ),
-                              maxLines: 3,
-                            ),
-                          ),
-                           const Divider(),
-
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                            child: TextField(
-                              controller: _extraItemsNotesController,
-                              decoration: const InputDecoration(
-                                labelText: 'Extra Items Notes (Optional)',
-                                hintText: 'e.g., 5 extra chairs, projector needed',
-                                border: OutlineInputBorder(),
-                              ),
-                              maxLines: 3,
-                            ),
-                          ),
-                           SizedBox(height: 16),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _bookClass,
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: _isLoading
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Text('Book Now'),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildRatingSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.star,
+                      color: Colors.amber,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.classModel.rating?.toStringAsFixed(1) ?? '0.0',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ClassReviewsPage(
+                          classId: widget.classModel.id,
+                          className: widget.classModel.name,
+                          averageRating: widget.classModel.rating ?? 0.0,
+                          totalReviews: widget.classModel.totalRatings ?? 0,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.rate_review),
+                  label: const Text('View All Reviews'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Based on ${widget.classModel.totalRatings ?? 0} reviews',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FutureBuilder<List<Review>>(
+              future: _firestoreService.getClassReviews(widget.classModel.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Text('Error loading reviews: ${snapshot.error}');
+                }
+
+                final reviews = snapshot.data ?? [];
+                
+                if (reviews.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No reviews yet',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    // Show user's review first if exists
+                    ..._buildUserReview(reviews),
+                    const Divider(height: 32),
+                    // Show other reviews
+                    ...reviews
+                        .where((review) => review.userId != Provider.of<AuthService>(context, listen: false).currentUser?.uid)
+                        .map((review) => _buildReviewCard(review))
+                        .toList(),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildUserReview(List<Review> reviews) {
+    final currentUser = Provider.of<AuthService>(context, listen: false).currentUser;
+    if (currentUser == null) return [];
+
+    final userReview = reviews.firstWhere(
+      (review) => review.userId == currentUser.uid,
+      orElse: () => Review(
+        id: '',
+        classId: '',
+        userId: '',
+        bookingId: '',
+        userName: '',
+        rating: 0,
+        comment: '',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      ),
+    );
+
+    if (userReview.id.isEmpty) return [];
+
+    return [
+      const Text(
+        'Your Review',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const SizedBox(height: 8),
+      _buildReviewCard(userReview),
+    ];
+  }
+
+  Widget _buildReviewCard(Review review) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primary,
+                child: Text(
+                  review.userName.isNotEmpty ? review.userName[0].toUpperCase() : 'U',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.userName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          review.rating.toString(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDate(review.createdAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          if (review.comment.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              review.comment,
+              style: const TextStyle(
+                fontSize: 14,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0, top: 16.0),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
+  String _formatDate(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        return '${difference.inMinutes} minutes ago';
+      }
+      return '${difference.inHours} hours ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
+  }
+
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: Colors.grey[700]),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 16),
+            softWrap: true,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: Colors.grey.shade300,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 } 

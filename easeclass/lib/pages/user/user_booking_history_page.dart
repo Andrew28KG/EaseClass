@@ -178,7 +178,7 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
                           itemCount: _filteredBookings.length,
                           itemBuilder: (context, index) {
                             final booking = _filteredBookings[index];
-                            return _buildBookingHistoryCard(booking);
+                            return _buildBookingCard(booking);
                           },
                         ),
                 ),
@@ -187,69 +187,125 @@ class _UserBookingHistoryPageState extends State<UserBookingHistoryPage> {
     );
   }
 
-  Widget _buildBookingHistoryCard(Map<String, dynamic> booking) {
-    // Minimal user info only
-    final isRejected = booking['status'] == 'rejected';
+  Widget _buildBookingCard(Map<String, dynamic> booking) {
+    final status = booking['status'] as String;
+    final statusColor = _getStatusColor(status);
+    final statusText = _getStatusText(status);
+    final hasRating = booking['rating'] != null;
+
     return Card(
+      margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0), // Adjust margin
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12), // Slightly smaller radius
-        side: BorderSide( // Add border based on status
-           color: _getStatusColor(booking['status']).withOpacity(0.3),
-           width: 1,
-        ),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: InkWell( // Use InkWell for tap effect
+      child: InkWell(
         onTap: () => _navigateToBookingDetail(booking),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(
-                    isRejected ? Icons.cancel : Icons.check_circle,
-                    color: isRejected ? Colors.red : _getStatusColor(booking['status']),
-                  ),
-                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      booking['roomDetails']?['name'] ?? booking['roomName'] ?? 'Room',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      booking['roomName'] ?? 'Room',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (isRejected)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red),
-                      ),
-                      child: const Text(
-                        'REJECTED',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text('Date: ${booking['date'] ?? ''}'),
-              Text('Time: ${booking['time'] ?? ''}'),
-              if (isRejected && booking['adminResponseReason'] != null && booking['adminResponseReason'].toString().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    'Reason: ${booking['adminResponseReason']}',
-                    style: const TextStyle(color: Colors.red, fontStyle: FontStyle.italic),
+              Row(
+                children: [
+                  Icon(Icons.business, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Building ${booking['building']}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Icon(Icons.stairs, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Floor ${booking['floor']}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    booking['date'],
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    booking['time'],
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              if (status == 'completed') ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      hasRating ? Icons.star : Icons.star_border,
+                      size: 16,
+                      color: hasRating ? Colors.amber : Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      hasRating ? 'Rated: ${booking['rating']}' : 'Not rated yet',
+                      style: TextStyle(
+                        color: hasRating ? Colors.amber : Colors.grey[600],
+                        fontSize: 14,
+                        fontWeight: hasRating ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
+              ],
             ],
           ),
         ),

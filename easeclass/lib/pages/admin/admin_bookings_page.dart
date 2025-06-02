@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'admin_booked_rooms_page.dart';
 import 'admin_booking_progress_page.dart';
 import 'admin_booking_history_page.dart';
+import 'booking_management_page.dart';
+import '../../theme/app_colors.dart';
 
 class AdminBookingsPage extends StatefulWidget {
   final bool showAppBar;
@@ -26,62 +27,41 @@ class _AdminBookingsPageState extends State<AdminBookingsPage> with SingleTicker
     _tabController.dispose();
     super.dispose();
   }
-      @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          // Solid orange header with title (square)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: 32, bottom: 16),
-            color: Colors.orange,
-            child: const Center(
-              child: Text(
-                'Bookings Management',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
+      backgroundColor: Colors.grey[50],
+      appBar: widget.showAppBar ? AppBar(
+        elevation: 0,
+        title: const Text('Bookings'),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: AppColors.primaryGradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
-          // TabBar for 3 sections with curved bottom
-          Container(
-            decoration: const BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              unselectedLabelStyle: const TextStyle(fontSize: 14),
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              tabs: const [
-                Tab(text: 'Approval'),
-                Tab(text: 'On-going'),
-                Tab(text: 'Completed'),
-              ],
-            ),
-          ),
-          // TabBarView content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                const AdminBookedRoomsPage(),
-                const AdminBookingProgressPage(),
-                const AdminBookingHistoryPage(),
-              ],
-            ),
-          ),
+        ),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: const [
+            Tab(text: 'Management'),
+            Tab(text: 'Progress'),
+            Tab(text: 'History'),
+          ],
+        ),
+      ) : null,
+      body: TabBarView(
+        controller: _tabController,
+        children: const [
+          BookingManagementPage(),
+          AdminBookingProgressPage(),
+          AdminBookingHistoryPage(),
         ],
       ),
     );

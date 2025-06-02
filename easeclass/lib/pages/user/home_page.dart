@@ -16,6 +16,9 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore for T
 import '../../pages/user/news_page.dart'; // Ensure NewsPage is imported
 import '../../models/notification_model.dart';
 import 'user_notifications_page.dart';
+import 'user_bookings_page.dart';
+import 'available_rooms_page.dart';
+import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -222,7 +225,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       Text(
                         'Book rooms with ease',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 16,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
@@ -242,10 +245,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       IconButton(
                         icon: const Icon(Icons.notifications_none, color: Colors.white),
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const UserNotificationsPage()),
-                          );
+                          // Use NavigationHelper to navigate to notifications
+                          NavigationHelper.navigateToNotifications(context);
                         },
                       ),
                       if (hasUnread)
@@ -413,7 +414,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
-                                // Use navigateToTab to switch to the bookings tab (index 2 for user)
+                                // Navigate to bookings tab (index 2)
                                 NavigationHelper.navigateToTab(context, 2);
                               },
                               child: Row(
@@ -564,7 +565,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
-                                NavigationHelper.navigateToAvailableClasses(context);
+                                // Navigate to available classes tab (index 1)
+                                NavigationHelper.navigateToTab(context, 1);
                               },
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -613,7 +615,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             ),
                             GestureDetector(
                               onTap: () {
-                                // Use navigateToTab to switch to the available classes tab (index 1)
+                                // Navigate to available classes tab with filter
                                 NavigationHelper.navigateToAvailableClasses(
                                   context,
                                   applyFilter: {'ratingSort': 'Highest to Lowest'},
@@ -828,7 +830,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 const SizedBox(height: 16),
                                 TextButton(
                                 onPressed: () {
-                                    // Use navigateToTab to switch to the profile tab (index 3 for user)
+                                    // Navigate to settings tab (index 3)
                                     NavigationHelper.navigateToTab(context, 3);
                                 },
                                   child: const Text('View more FAQs in Profile'),
@@ -854,7 +856,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   Widget _buildAvailableClassesSection() {
     return Container(
-      height: 200, // Adjusted height
+      height: 200,
       child: _availableClasses.isEmpty
           ? Center(child: Text('No available classes found'))
           : ListView.builder(
@@ -884,17 +886,45 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             color: AppColors.secondary.withOpacity(0.1),
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                           ),
-                          child: Center(
-                            child: Icon(
-                              Icons.class_,
-                              size: 40,
-                              color: AppColors.secondary,
-                            ),
-                          ),
+                          child: classItem.imageUrl != null && classItem.imageUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                  child: Image.network(
+                                    classItem.imageUrl!,
+                                    width: double.infinity,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Center(
+                                      child: Icon(
+                                        Icons.class_,
+                                        size: 40,
+                                        color: AppColors.secondary,
+                                      ),
+                                    ),
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Center(
+                                        child: CircularProgressIndicator(
+                                          value: loadingProgress.expectedTotalBytes != null
+                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                              : null,
+                                          color: AppColors.primary,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Center(
+                                  child: Icon(
+                                    Icons.class_,
+                                    size: 40,
+                                    color: AppColors.secondary,
+                                  ),
+                                ),
                         ),
                         Expanded(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Consistent vertical padding
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -922,14 +952,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8), // Added fixed space
+                                const SizedBox(height: 8),
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.star,
                                       size: 16,
-                                      color: Colors.amber,
+                                      color: AppColors.highlight,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
@@ -940,17 +970,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                       ),
                                     ),
                                   ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
               },
-      ),
+            ),
     );
   }
 
@@ -1207,4 +1237,80 @@ class __EventSliderWidgetState extends State<_EventSliderWidget> {
       ),
     );
   }
+}
+
+Widget _buildFeatureCard(String title, String description, IconData icon, VoidCallback onTap) {
+  return Card(
+    elevation: 2,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primary.withOpacity(0.1),
+              AppColors.primaryLight.withOpacity(0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: AppColors.primary,
+              size: 32,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildActionButton(String text, IconData icon, VoidCallback onPressed) {
+  return ElevatedButton(
+    onPressed: onPressed,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon),
+        const SizedBox(width: 8),
+        Text(text),
+      ],
+    ),
+  );
 }

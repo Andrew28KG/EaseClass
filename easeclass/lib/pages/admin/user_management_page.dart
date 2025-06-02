@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/user_model.dart';
 import '../../models/booking_model.dart';
+import 'package:flutter/foundation.dart'; // Import for compute
 
 class UserManagementPage extends StatefulWidget {
   const UserManagementPage({Key? key}) : super(key: key);
@@ -40,85 +41,88 @@ class _UserManagementPageState extends State<UserManagementPage> {
       final querySnapshot = await _firestore.collection('users').get();
       
       if (mounted) {
-        final allUsers = querySnapshot.docs.map((doc) {
-          return UserModel.fromFirestore(doc);
-        }).toList();
-        
-        // Filter to show students (role: 'user') and teachers, exclude admins
-        final filteredUsers = allUsers.where((user) => 
-          user.role == 'user' || user.role == 'teacher'
-        ).toList();
+        // Process data in a separate isolate using compute
+        final processedData = await compute(_processUserData, querySnapshot.docs);
 
-        // Calculate statistics
-        _studentCount = filteredUsers.where((user) => user.role == 'user').length;
-        _teacherCount = filteredUsers.where((user) => user.role == 'teacher').length;
-        _totalUsers = filteredUsers.length;
-        
         setState(() {
-          _users = allUsers;
-          _filteredUsers = filteredUsers;
+          _users = processedData['allUsers']!;
+          _filteredUsers = processedData['initialFilteredUsers']!;
+          _studentCount = processedData['studentCount']!;
+          _teacherCount = processedData['teacherCount']!;
+          _totalUsers = processedData['totalUsers']!;
           _isLoading = false;
         });
 
-        // Debug print to check users
-        print('Total users loaded: ${allUsers.length}');
-        print('Filtered users: ${filteredUsers.length}');
-        allUsers.forEach((user) {
-          print('User: ${user.email}, Role: ${user.role}');
+        // Debug prints
+        print('Total users loaded (including admin): ${_users.length}');
+        print('Filtered users (students/teachers): ${_filteredUsers.length}');
+        _users.forEach((user) {
+          print('User loaded: ${user.email}, Role: ${user.role}');
         });
+        _filteredUsers.forEach((user) {
+           print('Filtered user: ${user.email}, Role: ${user.role}');
+        });
+
       }
     } catch (e) {
       print('Error loading users: $e');
-      _populateDummyData();
-      setState(() => _isLoading = false);
+      // Handle error loading, maybe show an error message and keep list empty
+      if (mounted) {
+         setState(() {
+           _users = [];
+           _filteredUsers = [];
+           _studentCount = 0;
+           _teacherCount = 0;
+           _totalUsers = 0;
+           _isLoading = false;
+         });
+      }
     }
   }
-    void _populateDummyData() {
-    final dummyUsers = [
-      UserModel(
-        id: '1',
-        email: 'john.doe@example.com',
-        role: 'student',
-        displayName: 'John Doe',
-        createdAt: Timestamp.fromDate(DateTime(2023, 5, 15)),
-      ),
-      UserModel(
-        id: '2',
-        email: 'jane.smith@example.com',
-        role: 'teacher',
-        displayName: 'Jane Smith',
-        createdAt: Timestamp.fromDate(DateTime(2023, 4, 20)),
-      ),
-      UserModel(
-        id: '4',
-        email: 'sara.wilson@example.com',
-        role: 'student',
-        displayName: 'Sara Wilson',
-        createdAt: Timestamp.fromDate(DateTime(2023, 6, 5)),
-      ),
-    ];
-      // Only count students and teachers
-    _studentCount = dummyUsers.where((user) => user.role == 'student').length;
-    _teacherCount = dummyUsers.where((user) => user.role == 'teacher').length;
-    _totalUsers = dummyUsers.length; // Total only includes students and teachers
-    
-    _users = dummyUsers;
-    _filteredUsers = dummyUsers;
+  
+  // Function to process user data in a separate isolate
+  static Map<String, dynamic> _processUserData(List<QueryDocumentSnapshot> docs) {
+    // Load all users (including admins) into allUsers
+    final allUsers = docs.map((doc) {
+      return UserModel.fromFirestore(doc);
+    }).toList();
+
+    // Initialize filtered list to show only students and teachers
+    final initialFilteredUsers = allUsers.where((user) => user.role == 'student' || user.role == 'teacher').toList();
+
+    // Calculate statistics based on the initially filtered list
+    final studentCount = initialFilteredUsers.where((user) => user.role == 'student').length;
+    final teacherCount = initialFilteredUsers.where((user) => user.role == 'teacher').length;
+    final totalUsers = initialFilteredUsers.length; // Total of students and teachers
+
+    return {
+      'allUsers': allUsers,
+      'initialFilteredUsers': initialFilteredUsers,
+      'studentCount': studentCount,
+      'teacherCount': teacherCount,
+      'totalUsers': totalUsers,
+    };
   }
   
   void _filterUsers(String query) {
-    if (query.isEmpty) {
-      setState(() => _filteredUsers = _users);
-      return;
-    }
-    
     final lowercaseQuery = query.toLowerCase();
     setState(() {
-      _filteredUsers = _users.where((user) => 
-        (user.displayName?.toLowerCase().contains(lowercaseQuery) ?? false) ||
-        user.email.toLowerCase().contains(lowercaseQuery) ||
-        user.role.toLowerCase().contains(lowercaseQuery)
+      // Always filter to show only students and teachers first (case-insensitive and trimmed)
+      List<UserModel> roleFilteredUsers = _users.where((user) =>
+          (user.role?.toLowerCase().trim() == 'student' || user.role?.toLowerCase().trim() == 'teacher') // Case-insensitive and trimmed role check
       ).toList();
+
+      if (query.isEmpty) {
+        // If query is empty, show all role-filtered users
+        _filteredUsers = roleFilteredUsers;
+      } else {
+        // If query is not empty, apply text search on top of role filter (case-insensitive and trimmed)
+        _filteredUsers = roleFilteredUsers.where((user) =>
+            (user.displayName?.toLowerCase().trim().contains(lowercaseQuery) ?? false) ||
+            user.email.toLowerCase().trim().contains(lowercaseQuery) ||
+            (user.department?.toLowerCase().trim().contains(lowercaseQuery) ?? false) // Case-insensitive and trimmed department search
+        ).toList();
+      }
     });
   }
   @override
@@ -306,13 +310,29 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 : _getIconForRole(user.role),
             ),
             title: Text(user.displayName ?? user.email.split('@').first),
-            subtitle: Text('Role: ${_capitalizeFirst(user.role)}'),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              tooltip: 'Delete User',
-              onPressed: () => _confirmDeleteUser(user),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Role: ${_capitalizeFirst(user.role)}'),
+                Text('Department: ${user.department ?? 'Not set'}'),
+              ],
             ),
-            isThreeLine: false,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.blue),
+                  tooltip: 'Edit User',
+                  onPressed: () => _showEditUserDialog(user),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  tooltip: 'Delete User',
+                  onPressed: () => _confirmDeleteUser(user),
+                ),
+              ],
+            ),
+            isThreeLine: true,
             onTap: () => _showUserDetails(user),
           ),
         );
@@ -854,10 +874,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
     // Add user dialog removed - no longer supporting user creation from admin interface
   
-  // Edit user dialog removed - no longer supporting user editing from admin interface
-  
-  // Delete user dialog removed - no longer supporting user deletion from admin interface
-
   Future<void> _showAddUserDialog() async {
     final TextEditingController emailController = TextEditingController();
     final TextEditingController nameController = TextEditingController();
@@ -866,6 +882,29 @@ class _UserManagementPageState extends State<UserManagementPage> {
     String selectedRole = 'student';
     String selectedDepartment = 'Computer Science';
     bool _isPasswordVisible = false;
+
+    final List<String> departments = [
+      'Computer Science',
+      'Information Systems',
+      'Information Technology',
+      'Electrical Engineering',
+      'Mechanical Engineering',
+      'Civil Engineering',
+      'Industrial Engineering',
+      'Chemical Engineering',
+      'Architecture',
+      'Mathematics',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Business Administration',
+      'Economics',
+      'Accounting',
+      'Management',
+      'Psychology',
+      'Law',
+      'Medicine',
+    ];
 
     await showDialog(
       context: context,
@@ -943,11 +982,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   decoration: const InputDecoration(
                     labelText: 'Department',
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'Computer Science', child: Text('Computer Science')),
-                    DropdownMenuItem(value: 'Information Systems', child: Text('Information Systems')),
-                    DropdownMenuItem(value: 'Information Technology', child: Text('Information Technology')),
-                  ],
+                  items: departments.map((String department) {
+                    return DropdownMenuItem<String>(
+                      value: department,
+                      child: Text(department),
+                    );
+                  }).toList(),
                   onChanged: (value) {
                     if (value != null) {
                       selectedDepartment = value;
@@ -992,14 +1032,19 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     'password': passwordController.text,
                   });
 
-                  // Sign out to stay in admin interface
-                  await FirebaseAuth.instance.signOut();
+                  // Sign out the newly created user to stay in admin interface
+                  await FirebaseAuth.instance.signOut(); // Explicitly sign out the new user
 
-                  // Reload users list
+                  // Reload users list while still logged in as admin
                   await _loadUsers();
 
+                  // Explicitly trigger a UI rebuild after loading
+                  if (mounted) { // Check if the widget is still mounted before calling setState
+                     setState(() {});
+                  }
+
                   if (mounted) {
-                    Navigator.pop(context);
+                    Navigator.pop(context); // Dismiss the dialog
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('User added successfully')),
                     );
@@ -1027,6 +1072,175 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 }
               },
               child: const Text('Add User'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditUserDialog(UserModel user) async {
+    final TextEditingController nameController = TextEditingController(text: user.displayName);
+    final TextEditingController nimController = TextEditingController(text: user.nim);
+    // Map 'user' role to 'student' for the dropdown
+    String selectedRole = user.role == 'student' ? 'student' : user.role;
+    String selectedDepartment = user.department ?? 'Computer Science';
+    bool _isPasswordVisible = false;
+    final TextEditingController passwordController = TextEditingController(text: user.password);
+
+    final List<String> departments = [
+      'Computer Science',
+      'Information Systems',
+      'Information Technology',
+      'Electrical Engineering',
+      'Mechanical Engineering',
+      'Civil Engineering',
+      'Industrial Engineering',
+      'Chemical Engineering',
+      'Architecture',
+      'Mathematics',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Business Administration',
+      'Economics',
+      'Accounting',
+      'Management',
+      'Psychology',
+      'Law',
+      'Medicine',
+    ];
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Edit User'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    hintText: 'Enter full name',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nimController,
+                  decoration: const InputDecoration(
+                    labelText: 'NIM',
+                    hintText: 'Enter NIM',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    hintText: 'Enter new password (optional)',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordVisible = !_isPasswordVisible;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: !_isPasswordVisible,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Role',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'student', child: Text('Student')),
+                    DropdownMenuItem(value: 'teacher', child: Text('Teacher')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      selectedRole = value;
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedDepartment,
+                  decoration: const InputDecoration(
+                    labelText: 'Department',
+                  ),
+                  items: departments.map((String department) {
+                    return DropdownMenuItem<String>(
+                      value: department,
+                      child: Text(department),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      selectedDepartment = value;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isEmpty || nimController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill all required fields')),
+                  );
+                  return;
+                }
+
+                try {
+                  // Update user document in Firestore
+                  final userData = {
+                    'displayName': nameController.text,
+                    'nim': nimController.text,
+                    'role': selectedRole,
+                    'department': selectedDepartment,
+                  };
+
+                  // Only update password if a new one is provided
+                  if (passwordController.text.isNotEmpty && passwordController.text != user.password) {
+                    userData['password'] = passwordController.text;
+                  }
+
+                  await _firestore.collection('users').doc(user.id).update(userData);
+
+                  // Reload users list
+                  await _loadUsers();
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('User updated successfully')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error updating user: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save Changes'),
             ),
           ],
         ),

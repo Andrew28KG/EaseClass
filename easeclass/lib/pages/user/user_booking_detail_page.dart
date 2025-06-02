@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/booking_model.dart';
 import '../../services/booking_service.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/navigation_helper.dart';
+import 'user_bookings_page.dart';
 
 class UserBookingDetailPage extends StatefulWidget {
   final BookingModel booking;
@@ -77,7 +79,13 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
           const SnackBar(content: Text('Booking cancelled successfully')),
         );
         widget.onBookingUpdated();
-        Navigator.pop(context);
+        // Use pushAndRemoveUntil to navigate back to bookings page
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => const UserBookingsPage(),
+          ),
+          (route) => route.isFirst, // Keep only the first route (home)
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -129,6 +137,13 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
           const SnackBar(content: Text('Booking marked as completed')),
         );
         widget.onBookingUpdated();
+        // Use pushAndRemoveUntil to navigate back to bookings page
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => const UserBookingsPage(),
+          ),
+          (route) => route.isFirst, // Keep only the first route (home)
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -141,116 +156,6 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Booking Details'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildStatusCard(),
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildTimelineCard(),
-                        const SizedBox(height: 16),
-                        _buildInfoCard(
-                          'Class Information',
-                          Icons.class_,
-                          [
-                            _buildInfoRow('Name', _currentBooking.roomDetails['name'] ?? 'N/A'),
-                            _buildInfoRow('Building', _currentBooking.roomDetails['building'] ?? 'N/A'),
-                            _buildInfoRow('Floor', (_currentBooking.roomDetails['floor'] ?? 'N/A').toString()),
-                            _buildInfoRow('Capacity', '${_currentBooking.roomDetails['capacity'] ?? 'N/A'} people'),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildInfoCard(
-                          'Booking Details',
-                          Icons.event,
-                          [
-                            _buildInfoRow('Date', _currentBooking.date),
-                            _buildInfoRow('Time', _formatTimeWithDuration(_currentBooking.time, _currentBooking.duration ?? 1)),
-                            _buildPurposeRow(_currentBooking.purpose),
-                            if (_currentBooking.extraItemsNotes != null && _currentBooking.extraItemsNotes!.isNotEmpty)
-                              _buildExtraItemsRow(_currentBooking.extraItemsNotes!),
-                            _buildInfoRow(
-                              'Created At',
-                              _formatTimestamp(_currentBooking.createdAt),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Admin Response Card (if rejected)
-                        if (_currentBooking.status.toLowerCase() == 'rejected' && 
-                            _currentBooking.adminResponseReason != null)
-                          _buildRejectionCard(),
-                        
-                        const SizedBox(height: 24),
-
-                        // Action Buttons
-                        if (_currentBooking.isActive)
-                          Column(
-                            children: [
-                              // Complete Button (only for approved bookings)
-                              if (_currentBooking.status.toLowerCase() == 'approved')
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: ElevatedButton.icon(
-                                    onPressed: _completeBooking,
-                                    icon: const Icon(Icons.check_circle),
-                                    label: const Text('Complete Booking'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      elevation: 2,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 12),
-                        // Cancel Button (only for active bookings)
-                              Container(
-                            width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: ElevatedButton.icon(
-                              onPressed: _cancelBooking,
-                              icon: const Icon(Icons.cancel),
-                              label: const Text('Cancel Booking'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 2,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-    );
   }
 
   Widget _buildStatusCard() {
@@ -682,5 +587,154 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
   String _formatTimestamp(Timestamp timestamp) {
     final date = timestamp.toDate();
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildActionButtons() {
+    if (_currentBooking.status == 'completed' && _currentBooking.rating == null) {
+      return ElevatedButton.icon(
+        onPressed: () {
+          Navigator.pushNamed(
+            context,
+            '/rating',
+            arguments: {
+              'bookingId': _currentBooking.id,
+              'roomId': _currentBooking.roomId,
+              'roomName': _currentBooking.roomDetails['name'],
+              'building': _currentBooking.roomDetails['building'],
+              'floor': _currentBooking.roomDetails['floor'],
+            },
+          );
+        },
+        icon: const Icon(Icons.star),
+        label: const Text('Rate Your Experience'),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Booking Details'),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: AppColors.primaryGradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStatusCard(),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTimelineCard(),
+                        const SizedBox(height: 16),
+                        _buildInfoCard(
+                          'Class Information',
+                          Icons.class_,
+                          [
+                            _buildInfoRow('Name', _currentBooking.roomDetails['name'] ?? 'N/A'),
+                            _buildInfoRow('Building', _currentBooking.roomDetails['building'] ?? 'N/A'),
+                            _buildInfoRow('Floor', (_currentBooking.roomDetails['floor'] ?? 'N/A').toString()),
+                            _buildInfoRow('Capacity', '${_currentBooking.roomDetails['capacity'] ?? 'N/A'} people'),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildInfoCard(
+                          'Booking Details',
+                          Icons.event,
+                          [
+                            _buildInfoRow('Date', _currentBooking.date),
+                            _buildInfoRow('Time', _formatTimeWithDuration(_currentBooking.time, _currentBooking.duration ?? 1)),
+                            _buildPurposeRow(_currentBooking.purpose),
+                            if (_currentBooking.extraItemsNotes != null && _currentBooking.extraItemsNotes!.isNotEmpty)
+                              _buildExtraItemsRow(_currentBooking.extraItemsNotes!),
+                            _buildInfoRow(
+                              'Created At',
+                              _formatTimestamp(_currentBooking.createdAt),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Admin Response Card (if rejected)
+                        if (_currentBooking.status.toLowerCase() == 'rejected' && 
+                            _currentBooking.adminResponseReason != null)
+                          _buildRejectionCard(),
+                        
+                        const SizedBox(height: 24),
+
+                        // Action Buttons
+                        if (_currentBooking.isActive)
+                          Column(
+                            children: [
+                              // Complete Button (only for approved bookings)
+                              if (_currentBooking.status.toLowerCase() == 'approved')
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: ElevatedButton.icon(
+                                    onPressed: _completeBooking,
+                                    icon: const Icon(Icons.check_circle),
+                                    label: const Text('Complete Booking'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 12),
+                        // Cancel Button (only for active bookings)
+                              Container(
+                            width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: ElevatedButton.icon(
+                              onPressed: _cancelBooking,
+                              icon: const Icon(Icons.cancel),
+                              label: const Text('Cancel Booking'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        _buildActionButtons(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
   }
 } 

@@ -6,6 +6,7 @@ import 'dart:io';
 import '../../services/firestore_service.dart';
 import '../../models/class_model.dart';
 import 'edit_class_page.dart';
+import 'add_class_page.dart';
 // Note: ClassEditPage was removed, edit functionality disabled for now
 
 class ClassManagementPage extends StatefulWidget {
@@ -108,258 +109,18 @@ class _ClassManagementPageState extends State<ClassManagementPage> with SingleTi
     });
   }
 
-  void _showAddClassDialog() {
-    final _formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-    String selectedBuilding = 'A'; // Default building
-    String selectedFloor = '1'; // Default floor
-    final capacityController = TextEditingController();
-    List<String> features = [];
-    
-    // Controllers for adding time slots in the add dialog (optional based on UI design)
-    final startTimeController = TextEditingController();
-    final endTimeController = TextEditingController();
-    final dayController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          File? _selectedImage;
-
-          Future<void> _pickImage() async {
-            final picker = ImagePicker();
-            final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-            if (pickedFile != null) {
-              setState(() {
-                _selectedImage = File(pickedFile.path);
-              });
-            }
-          }
-
-          Future<String?> _uploadImage(File imageFile) async {
-            try {
-              final storageRef = FirebaseStorage.instance.ref();
-              final imageName = 'class_images/${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
-              final uploadTask = storageRef.child(imageName).putFile(imageFile);
-              final snapshot = await uploadTask.whenComplete(() {});
-              final downloadUrl = await snapshot.ref.getDownloadURL();
-              return downloadUrl;
-            } catch (e) {
-              print('Error uploading image: $e');
-              // Optionally show an error message to the user
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to upload image: $e')),
-              );
-              return null;
-            }
-          }
-
-          return AlertDialog(
-        title: const Text('Add New Class'),
-        content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Class Name',
-                    hintText: 'e.g., Room 101',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                   validator: (value) {
-                      if (value == null || value.isEmpty) {
-                      return 'Please enter class name';
-                      }
-                      return null;
-                    },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: descriptionController,
-                  decoration: InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Enter class description',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                        decoration: InputDecoration(
-                          labelText: 'Building',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                  value: selectedBuilding,
-                  items: buildings.where((b) => b != 'All').map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        selectedBuilding = newValue;
-                      });
-                    }
-                  },
-                    ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                        decoration: InputDecoration(
-                          labelText: 'Floor',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                  value: selectedFloor,
-                  items: floors.where((f) => f != 'All').map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        selectedFloor = newValue;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: capacityController,
-                  decoration: InputDecoration(
-                    labelText: 'Capacity',
-                    hintText: 'e.g., 30',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  keyboardType: TextInputType.number,
-                   validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter capacity';
-                      }
-                      if (int.tryParse(value) == null) {
-                        return 'Please enter a valid number';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  // Image Picker Button and Preview
-                  TextButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.image),
-                    label: const Text('Pick Image'),
-                  ),
-                  if (_selectedImage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12.0),
-                      child: Image.file(
-                        _selectedImage!,
-                        height: 100,
-                        fit: BoxFit.cover,
-                      ),
-                ),
-              ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isEmpty || 
-                    capacityController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Please fill all required fields')),
-                  );
-                  return;
-                }
-
-                  String? imageUrl;
-                  if (_selectedImage != null) {
-                    // Upload image and get URL
-                    imageUrl = await _uploadImage(_selectedImage!);
-                    if (imageUrl == null) {
-                      // If image upload failed, stop here
-                      return;
-                    }
-                  }
-
-                try {
-                  final newClass = ClassModel(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  name: nameController.text,
-                  description: descriptionController.text,
-                    building: selectedBuilding,
-                    floor: int.parse(selectedFloor),
-                  capacity: int.parse(capacityController.text),
-                    isAvailable: true,
-                      features: features, // Assuming features are handled elsewhere or optional
-                    rating: 0.0,
-                    totalRatings: 0,
-                      imageUrl: imageUrl, // Include the uploaded image URL
-                      timeSlots: null, // Assuming time slots are handled elsewhere or optional
-                      metadata: null, // Assuming metadata is handled elsewhere or optional
-                    createdAt: Timestamp.now(),
-                    updatedAt: Timestamp.now(),
-                      totalReviews: 0,
-                      reviews: const [],
-                  );
-
-                  await _firestoreService.addClass(newClass);
-                  if (mounted) {
-                    Navigator.pop(context);
-                   ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Class added successfully')),
-                  );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                   ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error adding class: $e')),
-                  );
-                }
-              }
-            },
-              child: const Text('Add Class'),
-          ),
-        ],
-          );
-        },
-      ),
-    );
+  void _deleteClass(String classId) async {
+    try {
+       await _firestoreService.deleteClass(classId); // Use FirestoreService
+        ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text('Class deleted successfully')),
+       );
+     } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(content: Text('Error deleting class: $e')),
+       );
+     }
   }
-
-   void _deleteClass(String classId) async {
-     try {
-        await _firestoreService.deleteClass(classId); // Use FirestoreService
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Class deleted successfully')),
-        );
-      } catch (e) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting class: $e')),
-        );
-      }
-   }
 
   void _editClass(ClassModel classModel) async {
     final result = await Navigator.push(
@@ -666,7 +427,14 @@ class _ClassManagementPageState extends State<ClassManagementPage> with SingleTi
           ],
         ),
         floatingActionButton: _tabController.index == 0 ? FloatingActionButton(
-          onPressed: _showAddClassDialog,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AddClassPage()),
+            ).then((_) {
+              // The stream builder will automatically update when we return
+            });
+          },
           tooltip: 'Add New Class',
           child: const Icon(Icons.add),
         ) : null,

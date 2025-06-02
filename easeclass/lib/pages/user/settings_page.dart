@@ -7,6 +7,7 @@ import '../../pages/user/news_page.dart';
 import '../../pages/user/faq_page.dart';
 import '../../pages/user/about_page.dart';
 import '../../pages/user/change_password_page.dart';
+import '../../pages/user/notification_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -122,7 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
                       const SizedBox(height: 16),
                       _buildProfileInfoRow('NIM', _userData?['nim'] ?? '-'),
-                      _buildProfileInfoRow('Status', _userData?['status'] ?? '-'),
+                      _buildProfileInfoRow('Role', _getRoleDisplay(_userData?['role'] ?? 'user')),
                       _buildProfileInfoRow('Department', _userData?['department'] ?? '-'),
                       const SizedBox(height: 24),
                     ],
@@ -137,10 +138,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.notifications_outlined,
                   title: 'Notifications',
                   subtitle: 'Manage your notification preferences',
-            onTap: () {
-              // Handle notifications settings
-            },
-          ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const NotificationSettingsPage()),
+                    );
+                  },
+                ),
                 _buildSettingsTile(
                   context: context,
                   icon: Icons.lock_outline,
@@ -162,7 +166,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => NewsPage()));
                   },
-          ),
+                ),
                 _buildSettingsTile(
                   context: context,
                   icon: Icons.question_answer_outlined,
@@ -318,5 +322,18 @@ class _SettingsPageState extends State<SettingsPage> {
         onTap: onTap,
       ),
     );
+  }
+
+  String _getRoleDisplay(String role) {
+    switch (role.toLowerCase()) {
+      case 'user':
+        return 'Mahasiswa';
+      case 'teacher':
+        return 'Dosen';
+      case 'admin':
+        return 'Admin';
+      default:
+        return 'Mahasiswa';
+    }
   }
 } 

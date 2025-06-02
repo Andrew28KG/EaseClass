@@ -23,6 +23,7 @@ class _EditClassPageState extends State<EditClassPage> {
   final _buildingController = TextEditingController();
   final _floorController = TextEditingController();
   final _capacityController = TextEditingController();
+  final _imageUrlController = TextEditingController();
   final _firestoreService = FirestoreService();
   
   bool _isLoading = false;
@@ -36,6 +37,10 @@ class _EditClassPageState extends State<EditClassPage> {
     'Friday',
     'Saturday',
   ];
+  final TextEditingController _newTimeSlotTitleController = TextEditingController();
+  final TextEditingController _newStartTimeController = TextEditingController();
+  final TextEditingController _newEndTimeController = TextEditingController();
+  String _newTimeSlotSelectedDay = 'Monday';
 
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _EditClassPageState extends State<EditClassPage> {
     _floorController.text = widget.classModel.floor.toString();
     _capacityController.text = widget.classModel.capacity.toString();
     _features = List<String>.from(widget.classModel.features);
+    _imageUrlController.text = widget.classModel.imageUrl ?? '';
   }
 
   @override
@@ -60,6 +66,10 @@ class _EditClassPageState extends State<EditClassPage> {
     _buildingController.dispose();
     _floorController.dispose();
     _capacityController.dispose();
+    _imageUrlController.dispose();
+    _newTimeSlotTitleController.dispose();
+    _newStartTimeController.dispose();
+    _newEndTimeController.dispose();
     super.dispose();
   }
 
@@ -70,14 +80,15 @@ class _EditClassPageState extends State<EditClassPage> {
 
     try {
       final updatedData = {
-        'name': _nameController.text,
-        'description': _descriptionController.text,
-        'building': _buildingController.text,
-        'floor': int.parse(_floorController.text),
-        'capacity': int.parse(_capacityController.text),
+        'name': _nameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'building': _buildingController.text.trim(),
+        'floor': int.tryParse(_floorController.text.trim()) ?? 0,
+        'capacity': int.tryParse(_capacityController.text.trim()) ?? 0,
         'features': _features,
         'updatedAt': FieldValue.serverTimestamp(),
         'timeSlots': _timeSlots.map((slot) => slot.toMap()).toList(),
+        'imageUrl': _imageUrlController.text.trim(),
       };
       await _firestoreService.updateClass(widget.classModel.id, updatedData);
       if (mounted) {
@@ -115,7 +126,7 @@ class _EditClassPageState extends State<EditClassPage> {
           onSubmitted: (value) {
             if (value.isNotEmpty) {
               setState(() {
-                _features.add(value);
+                _features.add(value.trim());
               });
               Navigator.pop(context);
             }
@@ -128,7 +139,7 @@ class _EditClassPageState extends State<EditClassPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              final value = featureController.text;
+              final value = featureController.text.trim();
               if (value.isNotEmpty) {
                 setState(() {
                   _features.add(value);
@@ -149,69 +160,84 @@ class _EditClassPageState extends State<EditClassPage> {
     });
   }
 
-  void _addTimeSlot(String day) async {
-    TimeOfDay? start;
-    TimeOfDay? end;
-    String? courseTitle;
-    final courseController = TextEditingController();
+  void _addTimeSlotDialog() async {
+    _newTimeSlotTitleController.clear();
+    _newStartTimeController.clear();
+    _newEndTimeController.clear();
+    _newTimeSlotSelectedDay = 'Monday';
+
     TimeSlot? newSlot;
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: Text('Add Time Slot for $day'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: courseController,
-                  decoration: const InputDecoration(
-                    labelText: 'Course/Study Title',
-                    hintText: 'e.g., Math 101',
+            title: const Text('Add Time Slot'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: _newTimeSlotSelectedDay,
+                    decoration: const InputDecoration(
+                      labelText: 'Day',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _days.map((String day) {
+                      return DropdownMenuItem<String>(
+                        value: day,
+                        child: Text(day),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _newTimeSlotSelectedDay = newValue;
+                        });
+                      }
+                    },
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      courseTitle = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: start ?? TimeOfDay(hour: 8, minute: 0),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            start = picked;
-                          });
-                        }
-                      },
-                      child: Text(start == null ? 'Start' : start!.format(context)),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _newTimeSlotTitleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Course/Study Title',
+                      hintText: 'e.g., Math 101',
+                      border: OutlineInputBorder(),
                     ),
-                    const Text('to'),
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: end ?? TimeOfDay(hour: 10, minute: 0),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            end = picked;
-                          });
-                        }
-                      },
-                      child: Text(end == null ? 'End' : end!.format(context)),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _newStartTimeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Start Time',
+                            hintText: 'Select Time',
+                            border: OutlineInputBorder(),
+                          ),
+                          readOnly: true,
+                          onTap: () => _selectTime(_newStartTimeController),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _newEndTimeController,
+                          decoration: const InputDecoration(
+                            labelText: 'End Time',
+                            hintText: 'Select Time',
+                            border: OutlineInputBorder(),
+                          ),
+                          readOnly: true,
+                          onTap: () => _selectTime(_newEndTimeController),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -219,13 +245,13 @@ class _EditClassPageState extends State<EditClassPage> {
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: (start != null && end != null && (courseTitle?.isNotEmpty ?? false))
+                onPressed: (_newStartTimeController.text.isNotEmpty && _newEndTimeController.text.isNotEmpty)
                     ? () {
                         newSlot = TimeSlot(
-                          day: day,
-                          startTime: start!.format(context),
-                          endTime: end!.format(context),
-                          courseEvent: courseTitle,
+                          day: _newTimeSlotSelectedDay,
+                          startTime: _newStartTimeController.text.trim(),
+                          endTime: _newEndTimeController.text.trim(),
+                          title: _newTimeSlotTitleController.text.trim().isNotEmpty ? _newTimeSlotTitleController.text.trim() : null,
                         );
                         Navigator.pop(context);
                       }
@@ -244,6 +270,17 @@ class _EditClassPageState extends State<EditClassPage> {
     }
   }
 
+  Future<void> _selectTime(TextEditingController controller) async {
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (pickedTime != null) {
+      final String formattedTime = '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}';
+      controller.text = formattedTime;
+    }
+  }
+
   void _removeTimeSlot(int index) {
     setState(() {
       _timeSlots.removeAt(index);
@@ -252,6 +289,8 @@ class _EditClassPageState extends State<EditClassPage> {
 
   @override
   Widget build(BuildContext context) {
+    final currentImageUrl = _imageUrlController.text.trim();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Class'),
@@ -392,7 +431,7 @@ class _EditClassPageState extends State<EditClassPage> {
                                 children: [
                                   Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
                                   TextButton.icon(
-                                    onPressed: () => _addTimeSlot(day),
+                                    onPressed: () => _addTimeSlotDialog(),
                                     icon: const Icon(Icons.add),
                                     label: const Text('Add Time Slot'),
                                   ),
@@ -404,7 +443,7 @@ class _EditClassPageState extends State<EditClassPage> {
                                 final i = entry.key;
                                 final slot = entry.value;
                                 return ListTile(
-                                  title: Text(slot.courseEvent ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  title: Text(slot.title ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                                   subtitle: Text('${slot.startTime} - ${slot.endTime}'),
                                   trailing: IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red),
@@ -417,6 +456,54 @@ class _EditClassPageState extends State<EditClassPage> {
                         ),
                       );
                     }),
+
+                    // Image URL Section
+                    Text(
+                      'Class Image URL',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _imageUrlController,
+                      decoration: const InputDecoration(
+                        labelText: 'Image URL',
+                        hintText: 'Enter image URL',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.url,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 16),
+                    if (currentImageUrl.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Image Preview:',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              currentImageUrl,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey[300],
+                                  child: const Center(
+                                    child: Text('Failed to load image from URL'),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
                   ],
                 ),
               ),

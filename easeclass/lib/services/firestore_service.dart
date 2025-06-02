@@ -174,14 +174,64 @@ class FirestoreService {
   // Review operations
   Future<List<Review>> getClassReviews(String classId) async {
     try {
+      print('=== Debug: Starting getClassReviews ===');
+      print('Class ID: $classId');
+      
+      // First check if the class exists
+      final classDoc = await _classesCollection.doc(classId).get();
+      if (!classDoc.exists) {
+        print('Error: Class document does not exist for ID: $classId');
+        return [];
+      }
+      print('Class document exists');
+      
+      // Check the reviews collection
+      print('Checking reviews collection...');
       final QuerySnapshot snapshot = await _reviewsCollection
           .where('classId', isEqualTo: classId)
           .orderBy('createdAt', descending: true)
           .get();
       
-      return snapshot.docs.map((doc) => Review.fromFirestore(doc)).toList();
-    } catch (e) {
+      print('Found ${snapshot.docs.length} reviews in collection');
+      
+      if (snapshot.docs.isEmpty) {
+        print('No reviews found for class ID: $classId');
+        return [];
+      }
+      
+      final reviews = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        print('Processing review document:');
+        print('- ID: ${doc.id}');
+        print('- Data: $data');
+        
+        final review = Review(
+          id: doc.id,
+          classId: data['classId'] ?? '',
+          userId: data['userId'] ?? '',
+          bookingId: data['bookingId'] ?? '',
+          userName: data['userName'] ?? 'Anonymous',
+          rating: (data['rating'] ?? 0.0).toDouble(),
+          comment: data['comment'] ?? '',
+          createdAt: data['createdAt'] ?? Timestamp.now(),
+          updatedAt: data['updatedAt'] ?? Timestamp.now(),
+        );
+        
+        print('Created Review object:');
+        print('- User: ${review.userName}');
+        print('- Rating: ${review.rating}');
+        print('- Comment: ${review.comment}');
+        
+        return review;
+      }).toList();
+      
+      print('Successfully processed ${reviews.length} reviews');
+      print('=== Debug: End getClassReviews ===');
+      
+      return reviews;
+    } catch (e, stackTrace) {
       print('Error getting class reviews: $e');
+      print('Stack trace: $stackTrace');
       return [];
     }
   }
@@ -193,11 +243,27 @@ class FirestoreService {
     String? comment,
   }) async {
     try {
+      print('=== Debug: Starting submitRating ===');
+      print('Booking ID: $bookingId');
+      print('Room ID: $roomId');
+      print('Rating: $rating');
+      print('Comment: $comment');
+
       // Get the current user
       final currentUser = await getCurrentUser();
       if (currentUser == null) {
+        print('Error: User not found');
         throw Exception('User not found');
       }
+      print('Current user: ${currentUser.displayName}');
+
+      // Get booking details
+      final bookingDoc = await _bookingsCollection.doc(bookingId).get();
+      if (!bookingDoc.exists) {
+        print('Error: Booking not found');
+        throw Exception('Booking not found');
+      }
+      print('Booking found');
 
       // Create a new review document
       final reviewId = _reviewsCollection.doc().id;
@@ -215,8 +281,11 @@ class FirestoreService {
         updatedAt: now,
       );
 
-      // Add the review
+      print('Created review object with ID: $reviewId');
+
+      // Add the review to the reviews collection
       await _reviewsCollection.doc(reviewId).set(review.toMap());
+      print('Added review to reviews collection');
 
       // Update the booking with the rating
       await _bookingsCollection.doc(bookingId).update({
@@ -224,6 +293,7 @@ class FirestoreService {
         'reviewId': reviewId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      print('Updated booking with rating');
 
       // Update the class rating
       final classDoc = await _classesCollection.doc(roomId).get();
@@ -238,11 +308,16 @@ class FirestoreService {
           'totalRatings': totalRatings,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        print('Updated class rating');
+      } else {
+        print('Warning: Class document not found');
       }
 
+      print('=== Debug: End submitRating ===');
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error submitting rating: $e');
+      print('Stack trace: $stackTrace');
       return false;
     }
   }

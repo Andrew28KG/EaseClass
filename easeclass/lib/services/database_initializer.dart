@@ -5,7 +5,8 @@ class DatabaseInitializer {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;  // Method to initialize all collections
   Future<void> initializeDatabase() async {
-    await _createRooms();
+    // Removed _createRooms() call as rooms collection is not used
+    // await _createRooms();
     await _createClasses();
     await _createFaqs();
     await _createEvents(); // Add events initialization
@@ -70,108 +71,6 @@ class DatabaseInitializer {
     } catch (e) {
       print('Error ensuring admin user: $e');
     }
-  }
-
-  // Create rooms collection
-  Future<void> _createRooms() async {
-    final CollectionReference roomsCollection = _firestore.collection('rooms');
-    
-    // Check if rooms already exist
-    final QuerySnapshot existingRooms = await roomsCollection.limit(1).get();
-    if (existingRooms.docs.isNotEmpty) {
-      print('Rooms collection already initialized');
-      return;
-    }
-    
-    final List<Map<String, dynamic>> roomsData = [
-      {
-        'building': 'A',
-        'floor': 1,
-        'capacity': 25,
-        'rating': 4.5,
-        'isAvailable': true,
-        'features': ['Projector', 'Whiteboard', 'Air Conditioning'],
-        'imageUrl': 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Lecture', 'lastRenovation': '2021-05-10'}
-      },
-      {
-        'building': 'A',
-        'floor': 2,
-        'capacity': 40,
-        'rating': 4.2,
-        'isAvailable': true,
-        'features': ['Smart Board', 'Surround Sound', 'Air Conditioning', 'Adjustable Lighting'],
-        'imageUrl': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Lecture', 'lastRenovation': '2022-01-15'}
-      },
-      {
-        'building': 'B',
-        'floor': 1,
-        'capacity': 30,
-        'rating': 4.8,
-        'isAvailable': true,
-        'features': ['Projector', 'Whiteboard', 'Video Conferencing', 'Adjustable Lighting'],
-        'imageUrl': 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Conference', 'lastRenovation': '2022-07-22'}
-      },
-      {
-        'building': 'B',
-        'floor': 3,
-        'capacity': 20,
-        'rating': 4.0,
-        'isAvailable': true,
-        'features': ['Whiteboard', 'Air Conditioning'],
-        'imageUrl': 'https://images.unsplash.com/photo-1577896851231-70ef18881754?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Seminar', 'lastRenovation': '2020-11-05'}
-      },
-      {
-        'building': 'C',
-        'floor': 1,
-        'capacity': 50,
-        'rating': 4.9,
-        'isAvailable': true,
-        'features': ['Smart Board', 'Surround Sound', 'Video Conferencing', 'Recording Equipment', 'Adjustable Lighting'],
-        'imageUrl': 'https://images.unsplash.com/photo-1517164850305-99a27ae571fe?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Auditorium', 'lastRenovation': '2023-02-10'}
-      },
-      {
-        'building': 'C',
-        'floor': 2,
-        'capacity': 15,
-        'rating': 3.8,
-        'isAvailable': false,
-        'features': ['Whiteboard', 'Air Conditioning'],
-        'imageUrl': 'https://images.unsplash.com/photo-1517164850305-99a27ae571fe?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Study Room', 'lastRenovation': '2019-06-20', 'maintenanceUntil': '2023-06-30'}
-      },
-      {
-        'building': 'A',
-        'floor': 3,
-        'capacity': 35,
-        'rating': 4.6,
-        'isAvailable': true,
-        'features': ['Projector', 'Smart Board', 'Air Conditioning', 'Ergonomic Furniture'],
-        'imageUrl': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Computer Lab', 'lastRenovation': '2022-09-05'}
-      },
-      {
-        'building': 'B',
-        'floor': 2,
-        'capacity': 45,
-        'rating': 4.3,
-        'isAvailable': true,
-        'features': ['Projector', 'Whiteboard', 'Air Conditioning', 'Adjustable Lighting'],
-        'imageUrl': 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'metadata': {'roomType': 'Lecture', 'lastRenovation': '2021-11-18'}
-      },
-    ];
-    
-    // Add each room to the collection
-    for (var roomData in roomsData) {
-      await roomsCollection.add(roomData);
-    }
-    
-    print('Rooms collection initialized with ${roomsData.length} documents');
   }
 
   // Create classes collection

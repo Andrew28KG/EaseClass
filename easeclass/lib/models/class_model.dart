@@ -82,36 +82,84 @@ class ClassModel {
   }
 
   factory ClassModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
+    final data = doc.data();
+    // Safely handle null or non-map data
+    if (data == null || !(data is Map<String, dynamic>)) {
+        // Log the error or handle it appropriately, e.g., return a default ClassModel or throw a specific error
+        print('Error: Document data is null or not a Map for document ID: ${doc.id}');
+        // Return a default or empty ClassModel to prevent crash
+        return ClassModel(
+          id: doc.id,
+          name: '', // default values
+          description: '',
+          building: '',
+          floor: 0,
+          capacity: 0,
+          isAvailable: false,
+          features: [],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        );
+    }
+
+    final Map<String, dynamic> mapData = data;
+
     // Handle features list
     List<String> featuresList = [];
-    if (data['features'] != null) {
-      featuresList = List<String>.from(data['features']);
+    if (mapData['features'] != null) {
+      // Safely cast to List and then to List<String>
+      if (mapData['features'] is List) {
+        featuresList = List<String>.from(mapData['features'].where((item) => item is String));
+      }
     }
-    
+
+    // Handle timeSlots list
+    List<TimeSlot>? timeSlotsList;
+    if (mapData['timeSlots'] != null && mapData['timeSlots'] is List) {
+      try {
+        timeSlotsList = (mapData['timeSlots'] as List<dynamic>)
+            .where((item) => item is Map<String, dynamic>)
+            .map((slot) => TimeSlot.fromMap(slot as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        print('Error parsing timeSlots for document ID: ${doc.id}, Error: $e');
+        // Handle or log the error appropriately
+      }
+    }
+
+    // Handle reviews list
+    List<Review> reviewsList = [];
+     if (mapData['reviews'] != null && mapData['reviews'] is List) {
+      try {
+         reviewsList = (mapData['reviews'] as List<dynamic>)
+            .where((item) => item is Map<String, dynamic>)
+            .map((review) => Review.fromMap(review as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        print('Error parsing reviews for document ID: ${doc.id}, Error: $e');
+        // Handle or log the error appropriately
+      }
+    }
+
+
     return ClassModel(
       id: doc.id,
-      name: data['name'] ?? '',
-      description: data['description'] ?? '',
-      building: data['building'] ?? '',
-      floor: data['floor'] ?? 1,
-      capacity: data['capacity'] ?? 20,
-      rating: (data['rating'] ?? 0.0).toDouble(),
-      totalRatings: data['totalRatings'] ?? 0,
-      isAvailable: data['isAvailable'] ?? true,
+      name: mapData['name'] ?? '',
+      description: mapData['description'] ?? '',
+      building: mapData['building'] ?? '',
+      floor: mapData['floor']?.toInt() ?? 0,
+      capacity: mapData['capacity']?.toInt() ?? 0,
+      rating: (mapData['rating'] ?? 0.0).toDouble(),
+      totalRatings: mapData['totalRatings'] ?? 0,
+      isAvailable: mapData['isAvailable'] ?? true,
       features: featuresList,
-      imageUrl: data['imageUrl'],
-      timeSlots: (data['timeSlots'] as List<dynamic>?)
-          ?.map((slot) => TimeSlot.fromMap(slot as Map<String, dynamic>))
-          .toList(),
-      metadata: data['metadata'],
-      createdAt: data['createdAt'] ?? Timestamp.now(),
-      updatedAt: data['updatedAt'] ?? Timestamp.now(),
-      totalReviews: data['totalReviews'] ?? 0,
-      reviews: (data['reviews'] as List<dynamic>? ?? [])
-          .map((review) => Review.fromMap(review))
-          .toList(),
+      imageUrl: mapData['imageUrl'],
+      timeSlots: timeSlotsList,
+      metadata: mapData['metadata'],
+      createdAt: mapData['createdAt'] ?? Timestamp.now(),
+      updatedAt: mapData['updatedAt'] ?? Timestamp.now(),
+      totalReviews: mapData['totalReviews'] ?? 0,
+      reviews: reviewsList,
     );
   }
 
@@ -138,6 +186,42 @@ class ClassModel {
   }
   
   factory ClassModel.fromMap(Map<String, dynamic> map) {
+     // Handle features list
+    List<String> featuresList = [];
+    if (map['features'] != null) {
+       if (map['features'] is List) {
+        featuresList = List<String>.from(map['features'].where((item) => item is String));
+      }
+    }
+
+    // Handle timeSlots list
+    List<TimeSlot>? timeSlotsList;
+    if (map['timeSlots'] != null && map['timeSlots'] is List) {
+       try {
+        timeSlotsList = (map['timeSlots'] as List<dynamic>)
+            .where((item) => item is Map<String, dynamic>)
+            .map((slot) => TimeSlot.fromMap(slot as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        print('Error parsing timeSlots from map: $e');
+        // Handle or log the error appropriately
+      }
+    }
+
+     // Handle reviews list
+    List<Review> reviewsList = [];
+     if (map['reviews'] != null && map['reviews'] is List) {
+      try {
+         reviewsList = (map['reviews'] as List<dynamic>)
+            .where((item) => item is Map<String, dynamic>)
+            .map((review) => Review.fromMap(review as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        print('Error parsing reviews from map: $e');
+        // Handle or log the error appropriately
+      }
+    }
+
     return ClassModel(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
@@ -146,20 +230,16 @@ class ClassModel {
       floor: map['floor']?.toInt() ?? 0,
       capacity: map['capacity']?.toInt() ?? 0,
       isAvailable: map['isAvailable'] ?? true,
-      features: List<String>.from(map['features'] ?? []),
+      features: featuresList,
       rating: map['rating']?.toDouble() ?? 0.0,
       totalRatings: map['totalRatings'] ?? 0,
       imageUrl: map['imageUrl'],
-      timeSlots: (map['timeSlots'] as List<dynamic>?)
-          ?.map((slot) => TimeSlot.fromMap(slot as Map<String, dynamic>))
-          .toList(),
+      timeSlots: timeSlotsList,
       metadata: map['metadata'],
       createdAt: map['createdAt'] ?? Timestamp.now(),
       updatedAt: map['updatedAt'] ?? Timestamp.now(),
       totalReviews: map['totalReviews'] ?? 0,
-      reviews: (map['reviews'] as List<dynamic>?)
-          ?.map((review) => Review.fromMap(review))
-          .toList() ?? [],
+      reviews: reviewsList,
     );
   }
 }

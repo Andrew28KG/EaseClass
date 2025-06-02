@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'theme/app_colors.dart';
 import 'pages/user/home_page.dart';
-import 'pages/user/available_rooms_page.dart';
+import 'pages/user/available_rooms_page.dart'; // Restored as it uses class collection
 import 'pages/user/user_bookings_page.dart'; // User's BookingsPage for user navigation
 import 'pages/user/progress_detail_page.dart';
 import 'pages/user/settings_page.dart';
@@ -425,7 +425,7 @@ class _MainPageState extends State<MainPage> {
                   case '/rating':
                     return const RatingPage();
                   default:
-                    return const HomePage();
+                    return const HomePage(); // Fallback, should not happen
                 }
               },
               settings: settings,
@@ -448,18 +448,20 @@ class _MainPageState extends State<MainPage> {
                       case 0:
                         return const HomePage();
                       case 1:
+                        // Tab 1 for Admin is Available Rooms (Classes)
                         return const AvailableRoomsPage();
                       case 2:
                       // For admins, tab 2 is Management
                         final manageTabIndex = settings.arguments is int
                             ? settings.arguments as int
                             : null;
-                        return ManagePage(initialTabIndex: manageTabIndex);                      case 3:
+                        return ManagePage(initialTabIndex: manageTabIndex);
+                      case 3:
                         return const UserBookingsPage();
                       case 4:
                         return const SettingsPage();
                       default:
-                        return const HomePage();
+                        return const HomePage(); // Fallback
                     }
                   } else {
                     // Regular user navigation
@@ -467,12 +469,14 @@ class _MainPageState extends State<MainPage> {
                       case 0:
                         return const HomePage();
                       case 1:
-                        return const AvailableRoomsPage();                      case 2:
+                        // Tab 1 for User is Available Rooms (Classes)
+                        return const AvailableRoomsPage();
+                      case 2:
                         return const UserBookingsPage();
                       case 3:
                         return const SettingsPage();
                       default:
-                        return const HomePage();
+                        return const HomePage(); // Fallback
                     }
                   }
                 },

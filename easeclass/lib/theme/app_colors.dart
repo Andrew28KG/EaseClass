@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 
 // Enhanced App Color Scheme and Design System
 class AppColors {
-  // Primary deep green
-  static const Color primary = Color(0xFF0E6333);
-  static const Color primaryLight = Color(0xFF3A8959);
-  static const Color primaryDark = Color(0xFF084D24);
+  // Primary orange
+  static const Color primary = Color(0xFFF26E21);
+  static const Color primaryLight = Color(0xFFF58D4E);
+  static const Color primaryDark = Color(0xFFD45A11);
   
   // Red accent 
   static const Color accent = Color(0xFFEC1C24);
   static const Color accentLight = Color(0xFFF04C53);
   static const Color accentDark = Color(0xFFCC1017);
   
-  // Orange secondary
-  static const Color secondary = Color(0xFFF26E21);
-  static const Color secondaryLight = Color(0xFFF58D4E);
-  static const Color secondaryDark = Color(0xFFD45A11);
+  // Green secondary
+  static const Color secondary = Color(0xFF0E6333);
+  static const Color secondaryLight = Color(0xFF3A8959);
+  static const Color secondaryDark = Color(0xFF084D24);
   
   // Amber/gold highlight
   static const Color highlight = Color(0xFFF9A121);
@@ -38,13 +38,13 @@ class AppColors {
   
   // Card gradients
   static const List<Color> primaryGradient = [
-    Color(0xFF0E6333),
-    Color(0xFF1D8046),
+    Color(0xFFF26E21),
+    Color(0xFFF58D4E),
   ];
   
   static const List<Color> secondaryGradient = [
-    Color(0xFFF26E21),
-    Color(0xFFF58D4E),
+    Color(0xFF0E6333),
+    Color(0xFF3A8959),
   ];
   
   // Shadow
