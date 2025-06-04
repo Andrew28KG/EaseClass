@@ -4,6 +4,7 @@ import '../../models/booking_model.dart';
 import '../../services/booking_service.dart'; // Although not strictly needed for history, might be useful for future expansion
 import '../../theme/app_colors.dart';
 import '../admin/admin_booking_detail_page.dart'; // Assuming this is used for admin response
+import 'rating_page.dart';  // Add this import
 
 class UserHistoryBookingDetailPage extends StatefulWidget {
   final BookingModel booking;
@@ -18,6 +19,43 @@ class UserHistoryBookingDetailPage extends StatefulWidget {
 }
 
 class _UserHistoryBookingDetailPageState extends State<UserHistoryBookingDetailPage> {
+  final BookingService _bookingService = BookingService();
+  late BookingModel _currentBooking;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentBooking = widget.booking;
+    _listenToBookingUpdates();
+  }
+
+  void _listenToBookingUpdates() {
+    _bookingService.getBookingById(widget.booking.id).then((updatedBooking) {
+      if (updatedBooking != null && mounted) {
+        setState(() {
+          _currentBooking = updatedBooking;
+        });
+      }
+    });
+  }
+
+  Future<void> _loadBookingDetails() async {
+    try {
+      final updatedBooking = await _bookingService.getBookingById(_currentBooking.id);
+      if (updatedBooking != null && mounted) {
+        setState(() {
+          _currentBooking = updatedBooking;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading booking details: $e')),
+        );
+      }
+    }
+  }
+
   // Helper function to format timestamp
   String _formatTimestamp(Timestamp timestamp) {
     final date = timestamp.toDate();
@@ -420,6 +458,63 @@ class _UserHistoryBookingDetailPageState extends State<UserHistoryBookingDetailP
     );
   }
 
+  Widget _buildActionButtons() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_currentBooking.status == 'completed' && _currentBooking.rating == null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RatingPage(),
+                    settings: RouteSettings(
+                      arguments: {
+                        'bookingId': _currentBooking.id,
+                        'roomId': _currentBooking.roomId,
+                        'roomName': _currentBooking.roomDetails['name'],
+                        'building': _currentBooking.roomDetails['building'],
+                        'floor': _currentBooking.roomDetails['floor'],
+                      },
+                    ),
+                  ),
+                ).then((_) {
+                  // Refresh the booking details after rating
+                  _loadBookingDetails();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.star, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text(
+                    'Rate Your Experience',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -463,19 +558,16 @@ class _UserHistoryBookingDetailPageState extends State<UserHistoryBookingDetailP
               Icons.event,
               [
                 _buildInfoRow('Date', widget.booking.date),
-                _buildInfoRow('Time', _formatTimeWithDuration(widget.booking.time, widget.booking.duration ?? 1)), // Use new format function
-                 _buildPurposeRow(widget.booking.purpose), // Use new purpose row
+                _buildInfoRow('Time', _formatTimeWithDuration(widget.booking.time, widget.booking.duration ?? 1)),
+                _buildInfoRow('Purpose', widget.booking.purpose),
                 if (widget.booking.extraItemsNotes != null && widget.booking.extraItemsNotes!.isNotEmpty)
-                  _buildExtraItemsRow(widget.booking.extraItemsNotes!), // Use new extra items row
-                _buildInfoRow(
-                  'Created At',
-                  _formatTimestamp(widget.booking.createdAt),
-                ),
+                  _buildInfoRow('Additional Notes', widget.booking.extraItemsNotes!),
+                _buildInfoRow('Created At', _formatTimestamp(widget.booking.createdAt)),
                 if (widget.booking.rating != null)
                   _buildInfoRow('Rating', '${widget.booking.rating}/5.0 ⭐'),
                 if (widget.booking.feedback != null && widget.booking.feedback!.isNotEmpty)
                   _buildInfoRow('Feedback', widget.booking.feedback!),
-              ]
+              ],
             ),
             const SizedBox(height: 16),
 
@@ -485,6 +577,9 @@ class _UserHistoryBookingDetailPageState extends State<UserHistoryBookingDetailP
               _buildRejectionCard(),
             
             const SizedBox(height: 24),
+
+            // Action Buttons
+            _buildActionButtons(),
           ],
         ),
       ),

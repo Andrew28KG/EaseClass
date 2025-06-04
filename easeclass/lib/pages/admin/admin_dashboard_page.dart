@@ -11,6 +11,7 @@ import '../../models/review_model.dart'; // To use ReviewModel
 import 'admin_bookings_page.dart';
 import 'top_booked_classes_page.dart';
 import 'booking_management_page.dart';
+import 'booking_detail_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({Key? key}) : super(key: key);
@@ -476,95 +477,87 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.pending_actions,
-                        color: Colors.orange,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          FutureBuilder<DocumentSnapshot>(
-                            future: _firestore.collection('classes').doc(booking.roomId).get(),
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData && snapshot.data!.exists) {
-                                final classData = snapshot.data!.data() as Map<String, dynamic>;
-                                return Text(
-                                  classData['name'] ?? 'Unknown Class',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                );
-                              }
-                              return const Text('Loading...');
-                            },
-                          ),
-                          const SizedBox(height: 4),
-                          FutureBuilder<DocumentSnapshot>(
-                            future: _firestore.collection('users').doc(booking.userId).get(),
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData && snapshot.data!.exists) {
-                                final userData = snapshot.data!.data() as Map<String, dynamic>;
-                                return Text(
-                                  'Booked by: ${userData['displayName'] ?? 'Unknown User'}',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                  ),
-                                );
-                              }
-                              return const Text('Loading user info...');
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BookingDetailPage(
+                    booking: booking,
+                    onBookingUpdated: () {
+                      // Refresh the dashboard data when booking is updated
+                      _fetchDashboardData();
+                    },
+                  ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    _buildInfoChip(
-                      Icons.calendar_today,
-                      booking.date,
-                    ),
-                    const SizedBox(width: 12),
-                    _buildInfoChip(
-                      Icons.access_time,
-                      booking.time,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoChip(
-                        Icons.description_outlined,
-                        booking.purpose,
-                        isExpandable: true,
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.pending_actions,
+                          color: Colors.orange,
+                          size: 20,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FutureBuilder<DocumentSnapshot>(
+                              future: _firestore.collection('classes').doc(booking.roomId).get(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasData && snapshot.data!.exists) {
+                                  final classData = snapshot.data!.data() as Map<String, dynamic>;
+                                  return Text(
+                                    classData['name'] ?? 'Unknown Class',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  );
+                                }
+                                return const Text('Loading...');
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${booking.date} at ${booking.time}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Purpose: ${booking.purpose}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Booked by: ${booking.userDetails?['name'] ?? 'Anonymous'}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
             ),
           ),
         );

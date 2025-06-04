@@ -1,0 +1,2 @@
+C:/Users/user/Documents/GitHub/EaseClass/Easeclass/android/app/.cxx/RelWithDebInfo/45151758/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/user/Documents/GitHub/EaseClass/Easeclass/android/app/.cxx/RelWithDebInfo/45151758/x86_64/CMakeFiles/rebuild_cache.dir

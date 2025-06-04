@@ -5,6 +5,7 @@ import '../../services/booking_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/navigation_helper.dart';
 import 'user_bookings_page.dart';
+import 'rating_page.dart';
 
 class UserBookingDetailPage extends StatefulWidget {
   final BookingModel booking;
@@ -137,13 +138,9 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
           const SnackBar(content: Text('Booking marked as completed')),
         );
         widget.onBookingUpdated();
-        // Use pushAndRemoveUntil to navigate back to bookings page
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const UserBookingsPage(),
-          ),
-          (route) => route.isFirst, // Keep only the first route (home)
-        );
+        
+        // Use NavigationHelper to navigate back to the bookings tab
+        NavigationHelper.navigateToBookings(context);
       }
     } catch (e) {
       if (mounted) {
@@ -154,6 +151,23 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadBookingDetails() async {
+    try {
+      final updatedBooking = await _bookingService.getBookingById(_currentBooking.id);
+      if (updatedBooking != null && mounted) {
+        setState(() {
+          _currentBooking = updatedBooking;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading booking details: $e')),
+        );
       }
     }
   }
@@ -590,32 +604,106 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
   }
 
   Widget _buildActionButtons() {
-    if (_currentBooking.status == 'completed' && _currentBooking.rating == null) {
-      return ElevatedButton.icon(
-        onPressed: () {
-          Navigator.pushNamed(
-            context,
-            '/rating',
-            arguments: {
-              'bookingId': _currentBooking.id,
-              'roomId': _currentBooking.roomId,
-              'roomName': _currentBooking.roomDetails['name'],
-              'building': _currentBooking.roomDetails['building'],
-              'floor': _currentBooking.roomDetails['floor'],
-            },
-          );
-        },
-        icon: const Icon(Icons.star),
-        label: const Text('Rate Your Experience'),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+    print('Building action buttons for booking:');
+    print('Status: ${_currentBooking.status}');
+    print('Rating: ${_currentBooking.rating}');
+    print('Is completed and not rated: ${_currentBooking.status == 'completed' && _currentBooking.rating == null}');
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_currentBooking.status == 'pending')
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            child: ElevatedButton(
+              onPressed: _cancelBooking,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Cancel Booking',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
-        ),
-      );
-    }
-    return const SizedBox.shrink();
+        if (_currentBooking.status == 'approved')
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            child: ElevatedButton(
+              onPressed: _completeBooking,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Complete Booking',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        if (_currentBooking.status == 'completed' && _currentBooking.rating == null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ElevatedButton(
+              onPressed: () {
+                print('Rating button pressed');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RatingPage(),
+                    settings: RouteSettings(
+                      arguments: {
+                        'bookingId': _currentBooking.id,
+                        'roomId': _currentBooking.roomId,
+                        'roomName': _currentBooking.roomDetails['name'],
+                        'building': _currentBooking.roomDetails['building'],
+                        'floor': _currentBooking.roomDetails['floor'],
+                      },
+                    ),
+                  ),
+                ).then((_) {
+                  // Refresh the booking details after rating
+                  _loadBookingDetails();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.star, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text(
+                    'Rate Your Experience',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -671,6 +759,10 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
                               'Created At',
                               _formatTimestamp(_currentBooking.createdAt),
                             ),
+                            if (_currentBooking.rating != null)
+                              _buildInfoRow('Rating', '${_currentBooking.rating}/5.0 ⭐'),
+                            if (_currentBooking.feedback != null && _currentBooking.feedback!.isNotEmpty)
+                              _buildInfoRow('Feedback', _currentBooking.feedback!),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -683,51 +775,6 @@ class _UserBookingDetailPageState extends State<UserBookingDetailPage> {
                         const SizedBox(height: 24),
 
                         // Action Buttons
-                        if (_currentBooking.isActive)
-                          Column(
-                            children: [
-                              // Complete Button (only for approved bookings)
-                              if (_currentBooking.status.toLowerCase() == 'approved')
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: ElevatedButton.icon(
-                                    onPressed: _completeBooking,
-                                    icon: const Icon(Icons.check_circle),
-                                    label: const Text('Complete Booking'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      elevation: 2,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 12),
-                        // Cancel Button (only for active bookings)
-                              Container(
-                            width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: ElevatedButton.icon(
-                              onPressed: _cancelBooking,
-                              icon: const Icon(Icons.cancel),
-                              label: const Text('Cancel Booking'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 2,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                         _buildActionButtons(),
                       ],
                     ),

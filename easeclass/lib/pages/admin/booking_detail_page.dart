@@ -229,6 +229,8 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
               'Created At', 
               _formatTimestamp(currentBooking.createdAt),
             ),
+            if (currentBooking.status.toLowerCase() == 'rejected' && currentBooking.adminResponseReason != null)
+              _buildDetailRow('Rejection Reason', currentBooking.adminResponseReason!),
             if (currentBooking.rating != null)
               _buildDetailRow('Rating', '${currentBooking.rating}/5.0 ⭐'),
             if (currentBooking.feedback != null && currentBooking.feedback!.isNotEmpty)

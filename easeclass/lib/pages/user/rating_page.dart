@@ -34,8 +34,6 @@ class _RatingPageState extends State<RatingPage> {
     final Map<String, dynamic> args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     setState(() {
       _roomName = args['roomName'] ?? 'Room';
-      _building = args['building'] ?? '';
-      _floor = args['floor'] ?? '';
     });
   }
 
@@ -152,30 +150,6 @@ class _RatingPageState extends State<RatingPage> {
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.business, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Building $_building',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Icon(Icons.stairs, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Floor $_floor',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
