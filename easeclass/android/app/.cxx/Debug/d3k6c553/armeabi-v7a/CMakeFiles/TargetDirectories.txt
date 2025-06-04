@@ -1,2 +1,0 @@
-D:/uasapk/EaseClass-main/easeclass/android/app/.cxx/Debug/d3k6c553/armeabi-v7a/CMakeFiles/edit_cache.dir
-D:/uasapk/EaseClass-main/easeclass/android/app/.cxx/Debug/d3k6c553/armeabi-v7a/CMakeFiles/rebuild_cache.dir

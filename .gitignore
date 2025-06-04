@@ -15,6 +15,7 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
+.idea/**/*
 
 # VS Code related
 .vscode/*
@@ -36,16 +37,32 @@ coverage/
 *.g.dart
 *.freezed.dart
 
+# Android specific
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/GeneratedPluginRegistrant.*
+**/android/**/gradle-app.setting
+**/android/**/gradle.properties
+**/android/**/gradle.xml
+**/android/**/local.properties
+**/android/**/proguard/
+**/android/**/gradle/
+**/android/**/build/
+**/android/**/app/.cxx/
+**/android/**/app/debug/
+**/android/**/app/profile/
+**/android/**/app/release/
+
 # Symbolication related
 app.*.symbols
 
 # Obfuscation related
 app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
 
 # Firebase configuration files
 google-services.json

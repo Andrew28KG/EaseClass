@@ -1,2 +1,0 @@
-D:/uasapk/EaseClass-main/easeclass/android/app/.cxx/Debug/23n5y3b1/x86_64/CMakeFiles/edit_cache.dir
-D:/uasapk/EaseClass-main/easeclass/android/app/.cxx/Debug/23n5y3b1/x86_64/CMakeFiles/rebuild_cache.dir

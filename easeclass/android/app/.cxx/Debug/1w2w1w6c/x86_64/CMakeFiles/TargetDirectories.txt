@@ -1,2 +1,0 @@
-C:/Users/andre/Documents/GithubRepo/EaseClass/easeclass/android/app/.cxx/Debug/1w2w1w6c/x86_64/CMakeFiles/edit_cache.dir
-C:/Users/andre/Documents/GithubRepo/EaseClass/easeclass/android/app/.cxx/Debug/1w2w1w6c/x86_64/CMakeFiles/rebuild_cache.dir
