@@ -88,4 +88,4 @@ class ClassManagementHelpPage extends StatelessWidget {
       ),
     );
   }
-} 
+}
